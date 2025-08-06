@@ -5,6 +5,7 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
+    "check": "pnpm -r check",
     "version": "changeset version && pnpm -r version",
     "format": "pnpm -r format --write"
   },

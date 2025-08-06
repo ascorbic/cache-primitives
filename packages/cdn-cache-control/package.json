@@ -26,6 +26,10 @@
 	},
 	"scripts": {
 		"build": "tsdown src/index.ts --format esm,cjs --dts --clean",
+		"check": "pnpm run '/^check:.*/'",
+		"check:tsc": "tsc --noEmit",
+		"check:deno": "deno check src/index.ts",
+		"check:jsr": "deno publish --dry-run --allow-dirty",
 		"lint:types": "attw --pack .",
 		"lint:package": "publint",
 		"lint:prettier": "prettier --check src",
