@@ -40,9 +40,9 @@ type Global = typeof globalThis & {
 
 function detectCDN(): CDN | undefined {
   if ((globalThis as Global).process?.env?.CDN) {
-    return (globalThis as Global).process.env.CDN as CDN;
+    return (globalThis as Global).process!.env!.CDN as CDN;
   }
-  if ((globalThis as Global).process?.env.VERCEL) {
+  if ((globalThis as Global).process?.env?.VERCEL) {
     return "vercel";
   }
   if ("Netlify" in globalThis) {
