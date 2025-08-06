@@ -3,7 +3,10 @@
   "private": true,
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "version": "changeset version && pnpm -r version",
+    "format": "pnpm -r format --write"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.7",
