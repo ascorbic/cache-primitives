@@ -185,5 +185,6 @@ export type {
 	MiddlewareHandler,
 	ParsedCacheHeaders,
 	ReadHandler,
+	RevalidationHandler,
 	WriteHandler,
 } from "./types.ts";

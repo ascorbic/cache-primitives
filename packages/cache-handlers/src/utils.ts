@@ -238,6 +238,10 @@ export function parseResponseHeaders(
 		if (typeof directives["max-age"] === "number") {
 			result.ttl = directives["max-age"];
 		}
+
+		if (typeof directives["stale-while-revalidate"] === "number") {
+			result.staleWhileRevalidate = directives["stale-while-revalidate"];
+		}
 	}
 
 	if (features.cacheTags !== false) {

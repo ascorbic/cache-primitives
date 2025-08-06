@@ -78,11 +78,42 @@ export function createReadHandler(config: CacheConfig = {}): ReadHandler {
 			return null;
 		}
 
-		// Check expiration first
+		// Check expiration and handle stale-while-revalidate
 		const expiresHeader = cachedResponse.headers.get("expires");
+		const swrHeader = cachedResponse.headers.get("x-swr-expires");
+		
 		if (expiresHeader) {
 			const expiresAt = new Date(expiresHeader);
-			if (Date.now() >= expiresAt.getTime()) {
+			const now = Date.now();
+			
+			if (now >= expiresAt.getTime()) {
+				// Content is expired, check for stale-while-revalidate
+				if (swrHeader && config.revalidationHandler) {
+					const swrExpiresAt = new Date(swrHeader);
+					
+					if (now < swrExpiresAt.getTime()) {
+						// Content is stale but within SWR window
+						// Trigger background revalidation
+						const revalidationPromise = triggerRevalidation(request, config);
+						
+						if (config.waitUntil) {
+							// Use platform-specific waitUntil handler (e.g., Cloudflare Workers)
+							config.waitUntil(revalidationPromise);
+						} else {
+							// Fallback to queueMicrotask for platforms without waitUntil
+							queueMicrotask(() => {
+								revalidationPromise.catch((error) => {
+									console.warn("Background revalidation failed:", error);
+								});
+							});
+						}
+						
+						// Return stale content immediately
+						return cachedResponse;
+					}
+				}
+				
+				// Content is expired beyond SWR window, delete and return null
 				await cache.delete(cacheRequest);
 				return null;
 			}
@@ -186,6 +217,14 @@ export function createWriteHandler(config: CacheConfig = {}): WriteHandler {
 			headers.set("expires", expiresAt.toUTCString());
 		}
 
+		// Add SWR expiration if stale-while-revalidate is specified
+		if (cacheInfo.staleWhileRevalidate && cacheInfo.ttl) {
+			const swrExpiresAt = new Date(
+				Date.now() + (cacheInfo.ttl + cacheInfo.staleWhileRevalidate) * 1000
+			);
+			headers.set("x-swr-expires", swrExpiresAt.toUTCString());
+		}
+
 		if (cacheInfo.tags.length > 0) {
 			const validatedTags = validateCacheTags(cacheInfo.tags);
 			headers.set("cache-tag", validatedTags.join(", "));
@@ -282,4 +321,27 @@ export function createMiddlewareHandler(
 
 		return writeHandler(request, response);
 	};
+}
+
+/**
+ * Trigger background revalidation for stale-while-revalidate support.
+ * This function runs asynchronously and updates the cache with fresh content.
+ * 
+ * @param request - The original request to revalidate
+ * @param config - The cache configuration with revalidation handler
+ */
+async function triggerRevalidation(
+	request: Request,
+	config: CacheConfig,
+): Promise<void> {
+	if (!config.revalidationHandler) {
+		return;
+	}
+
+	// Call the revalidation handler to fetch fresh content
+	const freshResponse = await config.revalidationHandler(request);
+	
+	// Process the fresh response through the write handler logic
+	const writeHandler = createWriteHandler(config);
+	await writeHandler(request, freshResponse);
 }

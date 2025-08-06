@@ -84,6 +84,21 @@ export interface CacheConfig {
 	 * @default 31536000 (1 year)
 	 */
 	maxTtl?: number;
+
+	/**
+	 * Revalidation handler for stale-while-revalidate support.
+	 * Called when cached content is stale but within the SWR window.
+	 * If not provided, revalidation will be skipped.
+	 */
+	revalidationHandler?: RevalidationHandler;
+
+	/**
+	 * WaitUntil handler for background tasks (like revalidation).
+	 * Similar to Cloudflare Workers' ctx.waitUntil().
+	 * Allows the platform to keep processes alive for background work.
+	 * If not provided, queueMicrotask will be used as fallback.
+	 */
+	waitUntil?: (promise: Promise<any>) => void;
 }
 
 /**
@@ -178,6 +193,7 @@ export interface CacheVary {
  * const parsed: ParsedCacheHeaders = {
  *   shouldCache: true,
  *   ttl: 3600,
+ *   staleWhileRevalidate: 86400,
  *   tags: ["user:123", "api"],
  *   isPrivate: false,
  *   noCache: false,
@@ -196,6 +212,13 @@ export interface ParsedCacheHeaders {
 	 * TTL in seconds
 	 */
 	ttl?: number;
+
+	/**
+	 * Stale-while-revalidate duration in seconds.
+	 * If present, allows serving stale content for this duration after expiration
+	 * while fetching fresh content in the background.
+	 */
+	staleWhileRevalidate?: number;
 
 	/**
 	 * Cache tags
@@ -318,6 +341,23 @@ export interface MiddlewareHandler {
 }
 
 /**
+ * Revalidation handler function for stale-while-revalidate support.
+ * Called when content needs to be revalidated in the background.
+ *
+ * @example
+ * ```typescript
+ * const revalidateHandler: RevalidationHandler = async (request) => {
+ *   // Fetch fresh content and update cache
+ *   const response = await fetch(request.url);
+ *   return response;
+ * };
+ * ```
+ */
+export interface RevalidationHandler {
+	(request: Request): Promise<Response>;
+}
+
+/**
  * Collection of all cache handler types.
  * Returned by the createCacheHandlers factory function.
  */
@@ -325,6 +365,7 @@ export interface CacheHandlers {
 	read: ReadHandler;
 	write: WriteHandler;
 	middleware: MiddlewareHandler;
+	revalidate?: RevalidationHandler;
 }
 
 /**

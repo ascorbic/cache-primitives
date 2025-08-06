@@ -1,18 +1,29 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@std/assert@*": "1.0.13",
+    "jsr:@std/assert@^1.0.10": "1.0.13",
     "jsr:@std/assert@^1.0.13": "1.0.13",
-    "jsr:@std/internal@^1.0.6": "1.0.10"
+    "jsr:@std/internal@^1.0.5": "1.0.10",
+    "jsr:@std/internal@^1.0.6": "1.0.10",
+    "jsr:@std/testing@*": "1.0.8"
   },
   "jsr": {
     "@std/assert@1.0.13": {
       "integrity": "ae0d31e41919b12c656c742b22522c32fb26ed0cba32975cb0de2a273cb68b29",
       "dependencies": [
-        "jsr:@std/internal"
+        "jsr:@std/internal@^1.0.6"
       ]
     },
     "@std/internal@1.0.10": {
       "integrity": "e3be62ce42cab0e177c27698e5d9800122f67b766a0bea6ca4867886cbde8cf7"
+    },
+    "@std/testing@1.0.8": {
+      "integrity": "ceef535808fb7568e91b0f8263599bd29b1c5603ffb0377227f00a8ca9fe42a2",
+      "dependencies": [
+        "jsr:@std/assert@^1.0.10",
+        "jsr:@std/internal@^1.0.5"
+      ]
     }
   },
   "workspace": {
@@ -24,6 +35,7 @@
         "npm:@changesets/cli@^2.27.7",
         "npm:prettier@^3.3.1",
         "npm:tsdoc-markdown@0.6",
+        "npm:tsdown@~0.13.3",
         "npm:typescript@^5.9.2"
       ]
     },
@@ -31,8 +43,10 @@
       "packages/cache-handlers": {
         "packageJson": {
           "dependencies": [
+            "npm:@arethetypeswrong/core@~0.18.2",
             "npm:@cloudflare/vitest-pool-workers@~0.8.60",
-            "npm:tsdown@~0.13.2",
+            "npm:publint@~0.3.12",
+            "npm:tsdown@~0.13.3",
             "npm:undici@^7.13.0",
             "npm:vitest@^3.2.4"
           ]
@@ -41,10 +55,10 @@
       "packages/cdn-cache-control": {
         "packageJson": {
           "dependencies": [
-            "npm:@arethetypeswrong/cli@~0.15.3",
+            "npm:@arethetypeswrong/core@~0.18.2",
             "npm:@types/node@^20.14.2",
-            "npm:publint@~0.2.8",
-            "npm:tsdown@~0.13.2"
+            "npm:publint@~0.3.12",
+            "npm:tsdown@~0.13.3"
           ]
         }
       }
