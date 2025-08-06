@@ -106,9 +106,9 @@ The headers object can be used anywhere that accepts a `fetch` `Headers` object.
 import { CacheHeaders } from "cdn-cache-control";
 
 export default async function handler(request: Request): Promise<Response> {
-  const headers = new CacheHeaders().swr();
-  // The `Response` constructor accepts the object directly
-  return new Response("Hello", { headers });
+	const headers = new CacheHeaders().swr();
+	// The `Response` constructor accepts the object directly
+	return new Response("Hello", { headers });
 }
 ```
 
@@ -181,32 +181,32 @@ Number of seconds in one year
 
 - [Installation](#installation)
 - [Usage](#usage)
-	- [Use cases](#use-cases)
-		- [stale-while-revalidate](#stale-while-revalidate)
-		- [Immutable content](#immutable-content)
-		- [Cache tags](#cache-tags)
-		- [Using the generated headers](#using-the-generated-headers)
+  - [Use cases](#use-cases)
+    - [stale-while-revalidate](#stale-while-revalidate)
+    - [Immutable content](#immutable-content)
+    - [Cache tags](#cache-tags)
+    - [Using the generated headers](#using-the-generated-headers)
 - [API](#api)
 - [:wrench: Constants](#wrench-constants)
-	- [:gear: ONE\_MINUTE](#gear-one_minute)
-	- [:gear: ONE\_HOUR](#gear-one_hour)
-	- [:gear: ONE\_DAY](#gear-one_day)
-	- [:gear: ONE\_WEEK](#gear-one_week)
-	- [:gear: ONE\_YEAR](#gear-one_year)
+  - [:gear: ONE_MINUTE](#gear-one_minute)
+  - [:gear: ONE_HOUR](#gear-one_hour)
+  - [:gear: ONE_DAY](#gear-one_day)
+  - [:gear: ONE_WEEK](#gear-one_week)
+  - [:gear: ONE_YEAR](#gear-one_year)
 - [:factory: CacheHeaders](#factory-cacheheaders)
-	- [Methods](#methods)
-		- [:gear: tag](#gear-tag)
-		- [:gear: swr](#gear-swr)
-		- [:gear: immutable](#gear-immutable)
-		- [:gear: ttl](#gear-ttl)
-		- [:gear: toObject](#gear-toobject)
-		- [:gear: copyTo](#gear-copyto)
-		- [:gear: getCdnCacheControl](#gear-getcdncachecontrol)
-		- [:gear: setCdnCacheControl](#gear-setcdncachecontrol)
-		- [:gear: getCacheControl](#gear-getcachecontrol)
-		- [:gear: setCacheControl](#gear-setcachecontrol)
-		- [:gear: getCacheTags](#gear-getcachetags)
-		- [:gear: setCacheTags](#gear-setcachetags)
+  - [Methods](#methods)
+    - [:gear: tag](#gear-tag)
+    - [:gear: swr](#gear-swr)
+    - [:gear: immutable](#gear-immutable)
+    - [:gear: ttl](#gear-ttl)
+    - [:gear: toObject](#gear-toobject)
+    - [:gear: copyTo](#gear-copyto)
+    - [:gear: getCdnCacheControl](#gear-getcdncachecontrol)
+    - [:gear: setCdnCacheControl](#gear-setcdncachecontrol)
+    - [:gear: getCacheControl](#gear-getcachecontrol)
+    - [:gear: setCacheControl](#gear-setcachecontrol)
+    - [:gear: getCacheTags](#gear-getcachetags)
+    - [:gear: setCacheTags](#gear-setcachetags)
 
 #### :gear: tag
 

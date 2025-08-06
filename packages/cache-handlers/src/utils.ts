@@ -335,50 +335,111 @@ export function parseResponseHeaders(
  * ```
  */
 export function defaultGetCacheKey(request: Request, vary?: CacheVary): string {
+	// Only support GET requests for caching
+	if (request.method !== "GET") {
+		// Return a cache key that will never match anything, but don't throw
+		return `unsupported-method:${request.method}:${request.url}`;
+	}
+
 	const url = new URL(request.url);
 	let key = `${url.origin}${url.pathname}`;
 
 	if (vary) {
 		const varyParts: string[] = [];
 
+		// Handle query parameters with proper sorting
 		if (vary.query.length > 0) {
 			const searchKey = new URLSearchParams();
-			const sortedQueries = vary.query.sort((a, b) => a.localeCompare(b));
+			const sortedQueries = [...vary.query].sort(); // Don't mutate original array
 			for (const queryName of sortedQueries) {
 				const value = url.searchParams.get(queryName) || "";
 				searchKey.set(queryName, value);
 			}
-			key += `?${searchKey.toString()}`;
+			if (searchKey.size > 0) {
+				key += `?${searchKey.toString()}`;
+			}
 		}
 
+		// Handle headers with collision-resistant format
 		if (vary.headers.length > 0) {
-			for (const headerName of vary.headers) {
-				const value = request.headers.get(headerName) || "";
-				varyParts.push(`header-${headerName.toLowerCase()}=${value}`);
-			}
+			const headerPairs = vary.headers
+				.sort() // Sort for consistency
+				.map((headerName) => {
+					const value = request.headers.get(headerName) || "";
+					return `${headerName.toLowerCase()}:${value}`;
+				});
+			varyParts.push(`h=${headerPairs.join(",")}`);
 		}
 
+		// Handle cookies with more robust parsing
 		if (vary.cookies.length > 0) {
-			const cookies = request.headers.get("cookie") || "";
-			const cookieMap = new Map<string, string>(
-				cookies.split(";").map((c) => {
-					const [key, ...value] = c.trim().split("=");
-					return [key || "", value.join("=")];
-				}),
-			);
-			for (const cookieName of vary.cookies) {
-				const value = cookieMap.get(cookieName) || "";
-				varyParts.push(`cookie-${cookieName}=${value}`);
-			}
+			const cookieValues = vary.cookies
+				.sort() // Sort for consistency
+				.map((cookieName) => {
+					const value = getCookieValue(request, cookieName) || "";
+					return `${cookieName}:${value}`;
+				});
+			varyParts.push(`c=${cookieValues.join(",")}`);
 		}
+
+		// Use collision-resistant separator
 		if (varyParts.length > 0) {
-			key += `|${varyParts.join("|")}`;
+			key += `::${varyParts.join("::")}`;
 		}
 	} else {
-		key += url.search;
+		// Normalize query parameters even without vary to ensure consistency
+		const sortedSearchParams = new URLSearchParams();
+		const entries = Array.from(url.searchParams.entries()).sort(([a], [b]) =>
+			a.localeCompare(b),
+		);
+		for (const [name, value] of entries) {
+			sortedSearchParams.append(name, value);
+		}
+
+		if (sortedSearchParams.size > 0) {
+			key += `?${sortedSearchParams.toString()}`;
+		}
 	}
 
 	return key;
+}
+
+/**
+ * Get a cookie value from a request's Cookie header.
+ * More robust than simple string splitting to handle edge cases.
+ *
+ * @param request - The request to extract cookie from
+ * @param cookieName - Name of the cookie to retrieve
+ * @returns Cookie value or null if not found
+ */
+function getCookieValue(request: Request, cookieName: string): string | null {
+	const cookieHeader = request.headers.get("cookie");
+	if (!cookieHeader) {
+		return null;
+	}
+
+	// Parse cookies more carefully to handle edge cases
+	const cookies = cookieHeader.split(";");
+	for (const cookie of cookies) {
+		const trimmed = cookie.trim();
+		const equalIndex = trimmed.indexOf("=");
+
+		if (equalIndex === -1) {
+			// Cookie without value
+			if (trimmed === cookieName) {
+				return "";
+			}
+		} else {
+			const name = trimmed.slice(0, equalIndex).trim();
+			const value = trimmed.slice(equalIndex + 1).trim();
+
+			if (name === cookieName) {
+				return value;
+			}
+		}
+	}
+
+	return null;
 }
 
 /**
@@ -464,13 +525,13 @@ export function isCacheValid(expiresHeader: string | null): boolean {
 /**
  * Validate and sanitize a single cache tag for security.
  *
- * Prevents header injection attacks by removing newlines, tabs, and carriage
- * returns. Enforces tag length constraints and ensures tags are non-empty
- * after sanitization.
+ * Prevents header injection attacks by removing all control characters and
+ * validating against injection patterns. Enforces strict tag length constraints
+ * and ensures tags are non-empty after sanitization.
  *
  * @param tag - The cache tag to validate
  * @returns The sanitized cache tag
- * @throws Error if the tag is invalid (empty, too long, not a string)
+ * @throws Error if the tag is invalid (empty, too long, not a string, or contains invalid chars)
  *
  * @example
  * ```typescript
@@ -478,7 +539,7 @@ export function isCacheValid(expiresHeader: string | null): boolean {
  * // Returns: "user:123"
  *
  * const sanitized = validateCacheTag("user\r\n:123\t");
- * // Returns: "user:123" (newlines and tabs removed)
+ * // Returns: "user:123" (control characters removed)
  *
  * try {
  *   validateCacheTag("");
@@ -487,9 +548,9 @@ export function isCacheValid(expiresHeader: string | null): boolean {
  * }
  *
  * try {
- *   validateCacheTag("x".repeat(1001));
+ *   validateCacheTag("x".repeat(101));
  * } catch (error) {
- *   // Throws: "Cache tag too long (max 1000 characters)"
+ *   // Throws: "Cache tag too long (max 100 characters)"
  * }
  * ```
  */
@@ -500,14 +561,26 @@ export function validateCacheTag(tag: string): string {
 	if (tag.length === 0) {
 		throw new Error("Cache tag cannot be empty");
 	}
-	if (tag.length > 1000) {
-		throw new Error("Cache tag too long (max 1000 characters)");
+	if (tag.length > 100) {
+		throw new Error("Cache tag too long (max 100 characters)");
 	}
-	// Remove control characters to prevent header injection attacks
-	const sanitized = tag.replace(/[\r\n\t]/g, "").trim();
+
+	// Remove ALL control characters (0-31) and DEL (127) except space (32)
+	const sanitized = tag.replace(/[\x00-\x1F\x7F]/g, "").trim();
+
 	if (sanitized.length === 0) {
 		throw new Error("Cache tag cannot be empty after sanitization");
 	}
+
+	// Validate against common injection patterns
+	if (
+		sanitized.includes("<") ||
+		sanitized.includes(">") ||
+		sanitized.includes('"')
+	) {
+		throw new Error('Cache tag contains invalid characters (<, >, ")');
+	}
+
 	return sanitized;
 }
 

@@ -1,17 +1,15 @@
 {
-    "typescript.tsdk": "node_modules/typescript/lib",
-    "deno.enablePaths": [
-        "packages/cache-handlers/test/deno"
-    ],
-    "deno.config": "./deno.json",
-    "deno.suggest.imports.hosts": {
-        "https://deno.land": true,
-        "https://jsr.io": true
-    },
-    "[typescript]": {
-        "editor.defaultFormatter": "denoland.vscode-deno"
-    },
-    "[javascript]": {
-        "editor.defaultFormatter": "denoland.vscode-deno"
-    }
+	"typescript.tsdk": "node_modules/typescript/lib",
+	"deno.enablePaths": ["packages/cache-handlers/test/deno"],
+	"deno.config": "./deno.json",
+	"deno.suggest.imports.hosts": {
+		"https://deno.land": true,
+		"https://jsr.io": true
+	},
+	"[typescript]": {
+		"editor.defaultFormatter": "denoland.vscode-deno"
+	},
+	"[javascript]": {
+		"editor.defaultFormatter": "denoland.vscode-deno"
+	}
 }

@@ -4,8 +4,7 @@ import {
 	parseETag,
 	compareETags,
 	parseIfNoneMatch,
-	parseLastModified,
-	parseIfModifiedSince,
+	parseHttpDate,
 	validateConditionalRequest,
 	create304Response,
 	getDefaultConditionalConfig,
@@ -85,26 +84,18 @@ Deno.test("Conditional Requests - If-None-Match parsing", () => {
 	assertEquals((empty as string[]).length, 0);
 });
 
-Deno.test("Conditional Requests - Last-Modified parsing", () => {
-	const validDate = parseLastModified("Wed, 21 Oct 2015 07:28:00 GMT");
+Deno.test("Conditional Requests - HTTP date parsing", () => {
+	const validDate = parseHttpDate("Wed, 21 Oct 2015 07:28:00 GMT");
 	assertExists(validDate);
 	assertEquals(validDate instanceof Date, true);
 
-	const invalidDate = parseLastModified("invalid date");
+	const invalidDate = parseHttpDate("invalid date");
 	assertEquals(invalidDate, null);
 
-	const emptyDate = parseLastModified("");
+	const emptyDate = parseHttpDate("");
 	assertEquals(emptyDate, null);
 });
 
-Deno.test("Conditional Requests - If-Modified-Since parsing", () => {
-	const validDate = parseIfModifiedSince("Wed, 21 Oct 2015 07:28:00 GMT");
-	assertExists(validDate);
-	assertEquals(validDate instanceof Date, true);
-
-	const invalidDate = parseIfModifiedSince("invalid");
-	assertEquals(invalidDate, null);
-});
 
 Deno.test("Conditional Requests - validateConditionalRequest with ETag", () => {
 	const request = new Request("https://example.com/test", {

@@ -29,13 +29,11 @@
 		}
 	},
 	"scripts": {
-		"build": "tsdown src/index.ts --format esm,cjs --dts --clean",
+		"build": "tsdown",
 		"check": "pnpm run '/^check:.*/'",
 		"check:tsc": "tsc --noEmit",
 		"check:deno": "deno check src/index.ts",
 		"check:jsr": "deno publish --dry-run --allow-dirty",
-		"lint:types": "attw --pack .",
-		"lint:package": "publint",
 		"lint:prettier": "prettier --check src",
 		"lint": "pnpm run '/^lint:.*/'",
 		"test": "pnpm run test:node",
@@ -47,9 +45,9 @@
 	"author": "Matt Kane <m@mk.gg>",
 	"license": "MIT",
 	"devDependencies": {
-		"@arethetypeswrong/cli": "^0.15.3",
+		"@arethetypeswrong/core": "^0.18.2",
 		"@types/node": "^20.14.2",
-		"publint": "^0.2.8",
-		"tsdown": "^0.13.2"
+		"publint": "^0.3.12",
+		"tsdown": "^0.13.3"
 	}
 }

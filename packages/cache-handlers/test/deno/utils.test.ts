@@ -125,7 +125,7 @@ Deno.test("defaultGetCacheKey - with vary headers", () => {
 	const result = defaultGetCacheKey(request, vary);
 	assertEquals(
 		result,
-		"https://example.com/api/users|header-accept=application/json|header-user-agent=test-agent",
+		"https://example.com/api/users::h=accept:application/json,user-agent:test-agent",
 	);
 });
 
@@ -134,7 +134,7 @@ Deno.test("defaultGetCacheKey - POST request", () => {
 		method: "POST",
 	});
 	const result = defaultGetCacheKey(request);
-	assertEquals(result, "http://example.com/api/users");
+	assertEquals(result, "unsupported-method:POST:http://example.com/api/users");
 });
 
 Deno.test("parseCacheVaryHeader - single header", () => {

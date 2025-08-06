@@ -33,7 +33,7 @@ Deno.test("Vary - defaultGetCacheKey", () => {
 	const cacheKey = defaultGetCacheKey(request, vary);
 
 	const expectedKey =
-		"http://example.com/api/users?utm_source=google|header-accept-language=en-US|header-x-forwarded-for=123.123.123.123|cookie-user-role=admin";
+		"http://example.com/api/users?utm_source=google::h=accept-language:en-US,x-forwarded-for:123.123.123.123::c=user-role:admin";
 	assertEquals(cacheKey, expectedKey);
 });
 

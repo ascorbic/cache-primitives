@@ -14,8 +14,7 @@ import type {
 } from "./types.ts";
 
 /**
- * Generate an ETag based on response content using Web Crypto API.
- * Uses SHA-1 hash of the response body for deterministic content-based ETags.
+ * Generate an ETag based on response content.
  *
  * @param response - The response to generate an ETag for
  * @returns The generated ETag string
@@ -25,12 +24,14 @@ export async function generateETag(response: Response): Promise<string> {
 	const cloned = response.clone();
 	const body = await cloned.arrayBuffer();
 
-	// Use Web Crypto API for SHA-1 hashing (fast and sufficient for ETags)
-	const hashBuffer = await crypto.subtle.digest('SHA-1', body);
-	
+	// Use Web Crypto API for SHA-1 hashing (fast and sufficient for ETags as it doesn't need to be cryptographically secure)
+	const hashBuffer = await crypto.subtle.digest("SHA-1", body);
+
 	// Convert hash to hex string
 	const hashArray = Array.from(new Uint8Array(hashBuffer));
-	const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+	const hashHex = hashArray
+		.map((b) => b.toString(16).padStart(2, "0"))
+		.join("");
 
 	// Format as a quoted string (full hash for collision avoidance)
 	return `"${hashHex}"`;
@@ -116,28 +117,19 @@ export function parseIfNoneMatch(headerValue: string): string[] | "*" {
 }
 
 /**
- * Parse and validate a Last-Modified date string.
+ * Parse and validate an HTTP date header value.
+ * Used for both Last-Modified and If-Modified-Since headers.
  *
- * @param dateString - The Last-Modified header value
+ * @param dateString - The HTTP date header value
  * @returns Parsed Date object or null if invalid
  */
-export function parseLastModified(dateString: string): Date | null {
+export function parseHttpDate(dateString: string): Date | null {
 	if (!dateString) {
 		return null;
 	}
 
 	const date = new Date(dateString);
 	return isNaN(date.getTime()) ? null : date;
-}
-
-/**
- * Parse If-Modified-Since header value.
- *
- * @param headerValue - The If-Modified-Since header value
- * @returns Parsed Date object or null if invalid
- */
-export function parseIfModifiedSince(headerValue: string): Date | null {
-	return parseLastModified(headerValue);
 }
 
 /**
@@ -194,8 +186,8 @@ export function validateConditionalRequest(
 	if (ifModifiedSince && config.lastModified !== false && !etagMatches) {
 		const cachedLastModified = cachedResponse.headers.get("last-modified");
 		if (cachedLastModified) {
-			const requestDate = parseIfModifiedSince(ifModifiedSince);
-			const cachedDate = parseLastModified(cachedLastModified);
+			const requestDate = parseHttpDate(ifModifiedSince);
+			const cachedDate = parseHttpDate(cachedLastModified);
 
 			if (requestDate && cachedDate) {
 				// Resource matches if it hasn't been modified since the request date

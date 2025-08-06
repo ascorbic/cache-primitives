@@ -1,5 +1,6 @@
 import type { InvalidationOptions } from "./types.ts";
 import { getCache, parseCacheTags, validateCacheTag } from "./utils.ts";
+import { safeJsonParse, getErrorHandler } from "./errors.ts";
 
 const METADATA_KEY = "https://cache-internal/cache-primitives-metadata";
 
@@ -39,18 +40,12 @@ export async function invalidateByTag(
 	let metadata: Record<string, string[]> = {};
 	let keysToDelete: string[] = [];
 
-	if (metadataResponse) {
-		try {
-			metadata = await metadataResponse.json();
-		} catch (error) {
-			console.warn(
-				"Failed to parse invalidation metadata, using empty object:",
-				error,
-			);
-			metadata = {};
-		}
-		keysToDelete = metadata[validatedTag] || [];
-	}
+	metadata = await safeJsonParse(
+		metadataResponse || null,
+		{} as Record<string, string[]>,
+		`invalidation metadata for tag: ${validatedTag}`,
+	);
+	keysToDelete = metadata[validatedTag] || [];
 
 	// Note: Fallback to full cache scan is not available in Deno Cache API
 	// This function relies on metadata for efficient invalidation

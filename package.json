@@ -7,12 +7,13 @@
     "lint": "pnpm -r lint",
     "check": "pnpm -r check",
     "version": "changeset version && pnpm -r version",
-    "format": "pnpm -r format --write"
+    "format": "prettier --write ."
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.7",
     "prettier": "^3.3.1",
     "tsdoc-markdown": "^0.6.0",
+    "tsdown": "^0.13.3",
     "typescript": "^5.9.2"
   },
   "packageManager": "pnpm@8.14.0+sha1.bb42032ff80dba5f9245bc1b03470d2fa0b7fb2f"

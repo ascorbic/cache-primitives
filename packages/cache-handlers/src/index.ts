@@ -82,6 +82,43 @@ export {
 } from "./utils.ts";
 
 /**
+ * Advanced metadata management utilities.
+ *
+ * @example
+ * ```typescript
+ * import { cleanupVaryMetadata } from "cache-primitives";
+ *
+ * // Clean up expired vary metadata
+ * await cleanupVaryMetadata(cache, metadataKey);
+ * ```
+ */
+export {
+	atomicMetadataUpdate,
+	cleanupVaryMetadata,
+	updateTagMetadata,
+	updateVaryMetadata,
+} from "./metadata.ts";
+
+/**
+ * Error handling utilities for customizable error management.
+ *
+ * @example
+ * ```typescript
+ * import { setErrorHandler, createSilentErrorHandler } from "cache-primitives";
+ *
+ * // Use silent error handler for tests
+ * setErrorHandler(createSilentErrorHandler());
+ * ```
+ */
+export {
+	createDefaultErrorHandler,
+	createSilentErrorHandler,
+	getErrorHandler,
+	setErrorHandler,
+} from "./errors.ts";
+export type { ErrorHandler, LogLevel } from "./errors.ts";
+
+/**
  * HTTP conditional request utilities for cache validation.
  *
  * @example
@@ -90,7 +127,8 @@ export {
  *   validateConditionalRequest,
  *   create304Response,
  *   generateETag,
- *   compareETags
+ *   compareETags,
+ *   parseHttpDate
  * } from "cache-primitives";
  *
  * // Validate conditional request
@@ -101,6 +139,9 @@ export {
  *
  * // Generate ETag for a response
  * const etag = await generateETag(response);
+ *
+ * // Parse HTTP dates (Last-Modified, If-Modified-Since)
+ * const date = parseHttpDate("Wed, 21 Oct 2015 07:28:00 GMT");
  * ```
  */
 export {
@@ -109,9 +150,8 @@ export {
 	generateETag,
 	getDefaultConditionalConfig,
 	parseETag,
-	parseIfModifiedSince,
+	parseHttpDate,
 	parseIfNoneMatch,
-	parseLastModified,
 	validateConditionalRequest,
 } from "./conditional.ts";
 

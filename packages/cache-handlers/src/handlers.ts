@@ -17,6 +17,8 @@ import {
 	getDefaultConditionalConfig,
 	generateETag,
 } from "./conditional.ts";
+import { updateTagMetadata, updateVaryMetadata } from "./metadata.ts";
+import { safeJsonParse } from "./errors.ts";
 
 const METADATA_KEY = "https://cache-internal/cache-primitives-metadata";
 const VARY_METADATA_KEY = "https://cache-internal/cache-vary-metadata";
@@ -53,20 +55,19 @@ export function createReadHandler(config: CacheConfig = {}): ReadHandler {
 	const getCacheKey = config.getCacheKey || defaultGetCacheKey;
 
 	return async (request: Request): Promise<Response | null> => {
+		// Only support GET requests for caching
+		if (request.method !== "GET") {
+			return null; // Non-GET requests are never cached
+		}
+
 		const cache = await getCache(config);
 		const varyMetadataResponse = await cache.match(VARY_METADATA_KEY);
 		let varyMetadata: Record<string, any> = {};
-		if (varyMetadataResponse) {
-			try {
-				varyMetadata = await varyMetadataResponse.clone().json();
-			} catch (error) {
-				console.warn(
-					"Failed to parse vary metadata, using empty object:",
-					error,
-				);
-				varyMetadata = {};
-			}
-		}
+		varyMetadata = await safeJsonParse(
+			varyMetadataResponse?.clone() || null,
+			{} as Record<string, any>,
+			"vary metadata parsing in read handler",
+		);
 
 		const vary = varyMetadata[request.url];
 		const cacheKey = await getCacheKey(request, vary);
@@ -146,6 +147,11 @@ export function createWriteHandler(config: CacheConfig = {}): WriteHandler {
 	const getCacheKey = config.getCacheKey || defaultGetCacheKey;
 
 	return async (request: Request, response: Response): Promise<Response> => {
+		// Only support GET requests for caching
+		if (request.method !== "GET") {
+			return response; // Return response as-is for non-GET requests
+		}
+
 		const cache = await getCache(config);
 		const cacheInfo = parseResponseHeaders(response, config);
 
@@ -195,60 +201,26 @@ export function createWriteHandler(config: CacheConfig = {}): WriteHandler {
 		await cache.put(cacheRequest, cacheResponse);
 
 		if (cacheInfo.tags.length > 0) {
-			const metadataResponse = await cache.match(METADATA_KEY);
-			let metadata: Record<string, string[]> = {};
-			if (metadataResponse) {
-				try {
-					metadata = await metadataResponse.json();
-				} catch (error) {
-					console.warn(
-						"Failed to parse cache metadata, using empty object:",
-						error,
-					);
-					metadata = {};
-				}
-			}
-
 			const validatedTags = validateCacheTags(cacheInfo.tags);
 			// Use the same key that's actually stored in cache (normalized URL)
 			const actualCacheKey = cacheRequest.url;
-			for (const tag of validatedTags) {
-				if (!metadata[tag]) {
-					metadata[tag] = [];
-				}
-				metadata[tag].push(actualCacheKey);
-			}
 
-			await cache.put(
+			// Use atomic metadata update to prevent race conditions
+			await updateTagMetadata(
+				cache,
 				METADATA_KEY,
-				new Response(JSON.stringify(metadata), {
-					headers: { "Content-Type": "application/json" },
-				}),
+				validatedTags,
+				actualCacheKey,
 			);
 		}
 
 		if (cacheInfo.vary) {
-			const varyMetadataResponse = await cache.match(VARY_METADATA_KEY);
-			let varyMetadata: Record<string, any> = {};
-			if (varyMetadataResponse) {
-				try {
-					varyMetadata = await varyMetadataResponse.json();
-				} catch (error) {
-					console.warn(
-						"Failed to parse vary metadata for writing, using empty object:",
-						error,
-					);
-					varyMetadata = {};
-				}
-			}
-
-			varyMetadata[request.url] = cacheInfo.vary;
-
-			await cache.put(
+			// Use atomic metadata update with built-in memory leak prevention
+			await updateVaryMetadata(
+				cache,
 				VARY_METADATA_KEY,
-				new Response(JSON.stringify(varyMetadata), {
-					headers: { "Content-Type": "application/json" },
-				}),
+				request.url,
+				cacheInfo.vary,
 			);
 		}
 
