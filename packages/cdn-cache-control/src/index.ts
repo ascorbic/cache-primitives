@@ -40,9 +40,9 @@ type Global = typeof globalThis & {
 
 function detectCDN(): CDN | undefined {
   if ((globalThis as Global).process?.env?.CDN) {
-    return (globalThis as Global).process.env.CDN as CDN;
+    return (globalThis as Global).process!.env!.CDN as CDN;
   }
-  if ((globalThis as Global).process?.env.VERCEL) {
+  if ((globalThis as Global).process?.env?.VERCEL) {
     return "vercel";
   }
   if ("Netlify" in globalThis) {
@@ -60,8 +60,11 @@ function parseCacheControlHeader(
   }
   return header.split(",").reduce(
     (acc, directive) => {
-      const [key, value] = directive.split("=");
-      acc[key] = value;
+      const [key, value] = directive.split("=").map((part) => part.trim());
+      if (!key) {
+        return acc;
+      }
+      acc[key] = value ?? "";
       return acc;
     },
     {} as Record<string, string>,
@@ -79,7 +82,7 @@ function serializeCacheControlHeader(
 }
 
 export class CacheHeaders extends Headers {
-  #cdn?: CDN;
+  #cdn?: CDN | undefined;
 
   public constructor(init?: HeadersInit, cdn?: CDN) {
     super(init);
