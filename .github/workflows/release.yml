@@ -23,29 +23,36 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           app-id: ${{ secrets.APP_ID }}
       - name: Checkout Repo
-        uses: actions/checkout@v3
-
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v3
+        uses: actions/checkout@v4
         with:
-          node-version: 22
+          persist-credentials: false
+          fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: latest
+          cache: "pnpm"
 
       - name: Install Dependencies
         run: pnpm install
 
       - name: Build Packages
-        run: pnpm build
+        run: pnpm run build
+      - run: pnpm run check
 
-      - name: publint
-        run: pnpm lint:package
+      # Update npm to latest version so that OIDC works correctly
+      - name: Update npm
+        run: npm install -g npm@latest
 
-      - name: Create Release PR or Publish to npm
+      - name: Create Release Pull Request or Publish to npm
         id: changesets
         uses: changesets/action@v1
         with:
-          version: pnpm run version
+          version: pnpm changeset version
           publish: pnpm changeset publish
           commit: "ci: release"
           title: "ci: release"

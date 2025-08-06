@@ -1,0 +1,41 @@
+{
+  "name": "cache-handlers",
+  "version": "0.0.0",
+  "description": "Modern CDN cache primitives using web-standard middleware",
+  "type": "module",
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm --dts --clean",
+    "dev": "tsdown src/index.ts --format esm --dts --watch",
+    "prepublishOnly": "node --run build",
+    "check": "publint && attw --pack --ignore-rules=cjs-resolves-to-esm",
+    "test": "pnpm run test:deno && pnpm run test:node && pnpm run test:workerd",
+    "test:deno": "cd ../.. && deno test packages/cache-handlers/test/deno/",
+    "test:node": "vitest run",
+    "test:workerd": "vitest run --config vitest.workerd.config.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4",
+    "@cloudflare/vitest-pool-workers": "^0.8.60",
+    "undici": "^7.13.0",
+    "tsdown": "^0.13.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascorbic/cdn-cache-control.git",
+    "directory": "packages/cache-handlers"
+  },
+  "homepage": "https://github.com/ascorbic/cdn-cache-control",
+  "keywords": [],
+  "author": "Matt Kane",
+  "license": "MIT"
+}
