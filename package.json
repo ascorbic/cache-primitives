@@ -1,5 +1,5 @@
 {
-  "name": "cdn-cache-control-monorepo",
+  "name": "cache-primitives",
   "private": true,
   "scripts": {
     "build": "pnpm -r build",

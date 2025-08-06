@@ -1,4 +1,4 @@
-# cdn-cache-control Monorepo
+# cache-primitives
 
 This repository is a monorepo containing several packages related to CDN cache control.
 
