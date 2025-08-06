@@ -14,8 +14,8 @@ import type {
 } from "./types.ts";
 
 /**
- * Generate a simple ETag based on response content.
- * Uses a basic hash of the response body for content-based ETags.
+ * Generate an ETag based on response content using Web Crypto API.
+ * Uses SHA-1 hash of the response body for deterministic content-based ETags.
  *
  * @param response - The response to generate an ETag for
  * @returns The generated ETag string
@@ -23,20 +23,17 @@ import type {
 export async function generateETag(response: Response): Promise<string> {
 	// Clone the response to avoid consuming the body
 	const cloned = response.clone();
-	const body = await cloned.text();
+	const body = await cloned.arrayBuffer();
 
-	// Simple hash function for ETag generation
-	// In production, you might want to use a more sophisticated hash
-	let hash = 0;
-	for (let i = 0; i < body.length; i++) {
-		const char = body.charCodeAt(i);
-		hash = (hash << 5) - hash + char;
-		hash = hash & hash; // Convert to 32-bit integer
-	}
+	// Use Web Crypto API for SHA-1 hashing (fast and sufficient for ETags)
+	const hashBuffer = await crypto.subtle.digest('SHA-1', body);
+	
+	// Convert hash to hex string
+	const hashArray = Array.from(new Uint8Array(hashBuffer));
+	const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
-	// Format as a quoted string with timestamp for uniqueness
-	const timestamp = Date.now();
-	return `"${Math.abs(hash)}-${timestamp}"`;
+	// Format as a quoted string (full hash for collision avoidance)
+	return `"${hashHex}"`;
 }
 
 /**
