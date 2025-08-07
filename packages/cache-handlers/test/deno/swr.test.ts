@@ -4,248 +4,273 @@ import { createReadHandler, createWriteHandler } from "../../src/index.ts";
 import type { CacheConfig, RevalidationHandler } from "../../src/types.ts";
 
 describe("Stale-While-Revalidate Support", () => {
-	const testCacheName = "swr-test-cache";
-	
-	// Clean up cache after each test
-	async function cleanup() {
-		const cache = await caches.open(testCacheName);
-		const keys = await cache.keys();
-		await Promise.all(keys.map(request => cache.delete(request)));
-	}
+  const testCacheName = "swr-test-cache";
 
-	// Helper to create test responses
-	function createTestResponse(content: string, cacheControl: string) {
-		return new Response(content, {
-			headers: {
-				"content-type": "text/plain",
-				"cache-control": cacheControl,
-			},
-		});
-	}
+  // Clean up cache after each test
+  async function cleanup() {
+    await caches.delete(testCacheName);
+  }
 
-	// Helper to wait for a specific duration
-	function wait(ms: number) {
-		return new Promise((resolve) => setTimeout(resolve, ms));
-	}
+  // Helper to create test responses
+  function createTestResponse(content: string, cacheControl: string) {
+    return new Response(content, {
+      headers: {
+        "content-type": "text/plain",
+        "cache-control": cacheControl,
+      },
+    });
+  }
 
-	it("should parse stale-while-revalidate directive from cache-control", async () => {
-		const config: CacheConfig = { cacheName: testCacheName };
-		const writeHandler = createWriteHandler(config);
+  function wait(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
 
-		const request = new Request("https://example.com/test");
-		const response = createTestResponse("content", "max-age=1, stale-while-revalidate=5");
+  it("should parse stale-while-revalidate directive from cache-control", async () => {
+    const config: CacheConfig = { cacheName: testCacheName };
+    const writeHandler = createWriteHandler(config);
 
-		await writeHandler(request, response);
+    const request = new Request("https://example.com/test");
+    const response = createTestResponse(
+      "content",
+      "max-age=1, stale-while-revalidate=5",
+    );
 
-		// Verify the cache contains the response with SWR headers
-		const cache = await caches.open(testCacheName);
-		const cachedResponse = await cache.match(request);
-		
-		assertExists(cachedResponse);
-		assertExists(cachedResponse.headers.get("expires"));
-		assertExists(cachedResponse.headers.get("x-swr-expires"));
+    await writeHandler(request, response);
 
-		await cleanup();
-	});
+    // Verify the cache contains the response with SWR headers
+    const cache = await caches.open(testCacheName);
+    const cachedResponse = await cache.match(request);
 
-	it("should serve fresh content when not expired", async () => {
-		const config: CacheConfig = { cacheName: testCacheName };
-		const readHandler = createReadHandler(config);
-		const writeHandler = createWriteHandler(config);
+    assertExists(cachedResponse?.headers.get("expires"));
+    assertExists(cachedResponse?.headers.get("x-swr-expires"));
+    await cachedResponse?.text();
 
-		const request = new Request("https://example.com/fresh");
-		const response = createTestResponse("fresh content", "max-age=10, stale-while-revalidate=20");
+    await cleanup();
+  });
 
-		// Cache the response
-		await writeHandler(request, response);
+  it("should serve fresh content when not expired", async () => {
+    const config: CacheConfig = { cacheName: testCacheName };
+    const readHandler = createReadHandler(config);
+    const writeHandler = createWriteHandler(config);
 
-		// Read should return the cached response
-		const cachedResponse = await readHandler(request);
-		assertExists(cachedResponse);
-		assertEquals(await cachedResponse.text(), "fresh content");
+    const request = new Request("https://example.com/fresh");
+    const response = createTestResponse(
+      "fresh content",
+      "max-age=10, stale-while-revalidate=20",
+    );
 
-		await cleanup();
-	});
+    // Cache the response
+    await writeHandler(request, response);
 
-	it("should serve stale content during SWR window and trigger revalidation", async () => {
-		let revalidationCalled = false;
-		let revalidationRequest: Request | undefined;
-		let waitUntilCalled = false;
+    // Read should return the cached response
+    const cachedResponse = await readHandler(request);
+    assertExists(cachedResponse);
+    assertEquals(await cachedResponse?.text(), "fresh content");
 
-		const revalidationHandler: RevalidationHandler = async (request) => {
-			revalidationCalled = true;
-			revalidationRequest = request;
-			return createTestResponse("revalidated content", "max-age=10, stale-while-revalidate=20");
-		};
+    await cleanup();
+  });
 
-		const waitUntil = (promise: Promise<any>) => {
-			waitUntilCalled = true;
-			// In a real scenario, the platform would handle this promise
-			promise.catch(() => {}); // Prevent unhandled rejection
-		};
+  it("should serve stale content during SWR window and trigger revalidation", async () => {
+    let revalidationCalled = false;
+    let revalidationRequest: Request | undefined;
+    let waitUntilCalled = false;
 
-		const config: CacheConfig = {
-			cacheName: testCacheName,
-			revalidationHandler,
-			waitUntil,
-		};
+    const revalidationHandler: RevalidationHandler = async (request) => {
+      revalidationCalled = true;
+      revalidationRequest = request;
+      return createTestResponse(
+        "revalidated content",
+        "max-age=10, stale-while-revalidate=20",
+      );
+    };
 
-		const readHandler = createReadHandler(config);
-		const writeHandler = createWriteHandler(config);
+    const waitUntil = (promise: Promise<any>) => {
+      waitUntilCalled = true;
+      // In a real scenario, the platform would handle this promise
+      promise.catch(() => {}); // Prevent unhandled rejection
+    };
 
-		const request = new Request("https://example.com/stale");
-		const response = createTestResponse("original content", "max-age=0.1, stale-while-revalidate=2");
+    const config: CacheConfig = {
+      cacheName: testCacheName,
+      revalidationHandler,
+      waitUntil,
+    };
 
-		// Cache the response
-		await writeHandler(request, response);
+    const readHandler = createReadHandler(config);
+    const writeHandler = createWriteHandler(config);
 
-		// Wait for content to become stale but within SWR window
-		await wait(150); // 150ms > 100ms (max-age)
+    const request = new Request("https://example.com/stale");
+    const response = createTestResponse(
+      "original content",
+      "max-age=0.1, stale-while-revalidate=2",
+    );
 
-		// Read should return stale content and trigger revalidation
-		const staleResponse = await readHandler(request);
-		assertExists(staleResponse);
-		assertEquals(await staleResponse.text(), "original content");
+    // Cache the response
+    await writeHandler(request, response);
 
-		// Give some time for background revalidation to be triggered
-		await wait(10);
+    // Wait for content to become stale but within SWR window
+    await wait(150); // 150ms > 100ms (max-age)
 
-		assertEquals(revalidationCalled, true, "Revalidation should be called");
-		assertEquals(waitUntilCalled, true, "waitUntil should be called");
-		assertExists(revalidationRequest);
-		assertEquals(revalidationRequest!.url, request.url);
+    // Read should return stale content and trigger revalidation
+    const staleResponse = await readHandler(request);
+    assertEquals(await staleResponse?.text(), "original content");
 
-		await cleanup();
-	});
+    // Give some time for background revalidation to be triggered
+    await wait(10);
 
-	it("should return null when content is expired beyond SWR window", async () => {
-		const config: CacheConfig = { cacheName: testCacheName };
-		const readHandler = createReadHandler(config);
-		const writeHandler = createWriteHandler(config);
+    assertEquals(revalidationCalled, true, "Revalidation should be called");
+    assertEquals(waitUntilCalled, true, "waitUntil should be called");
+    assertExists(revalidationRequest);
+    assertEquals(revalidationRequest!.url, request.url);
 
-		const request = new Request("https://example.com/expired");
-		const response = createTestResponse("expired content", "max-age=0.1, stale-while-revalidate=0.1");
+    await cleanup();
+  });
 
-		// Cache the response
-		await writeHandler(request, response);
+  it("should return null when content is expired beyond SWR window", async () => {
+    const config: CacheConfig = { cacheName: testCacheName };
+    const readHandler = createReadHandler(config);
+    const writeHandler = createWriteHandler(config);
 
-		// Wait for content to expire beyond SWR window
-		await wait(250); // 250ms > 200ms (max-age + stale-while-revalidate)
+    const request = new Request("https://example.com/expired");
+    const response = createTestResponse(
+      "expired content",
+      "max-age=0.1, stale-while-revalidate=0.1",
+    );
 
-		// Read should return null
-		const expiredResponse = await readHandler(request);
-		assertEquals(expiredResponse, null);
+    // Cache the response
+    await writeHandler(request, response);
 
-		await cleanup();
-	});
+    // Wait for content to expire beyond SWR window
+    await wait(250); // 250ms > 200ms (max-age + stale-while-revalidate)
 
-	it("should fallback to queueMicrotask when waitUntil is not provided", async () => {
-		let revalidationCalled = false;
+    // Read should return null
+    const expiredResponse = await readHandler(request);
+    assertEquals(expiredResponse, null);
 
-		const revalidationHandler: RevalidationHandler = async (request) => {
-			revalidationCalled = true;
-			return createTestResponse("revalidated content", "max-age=10");
-		};
+    await cleanup();
+  });
 
-		const config: CacheConfig = {
-			cacheName: testCacheName,
-			revalidationHandler,
-			// No waitUntil provided - should use queueMicrotask
-		};
+  it("should fallback to queueMicrotask when waitUntil is not provided", async () => {
+    let revalidationCalled = false;
 
-		const readHandler = createReadHandler(config);
-		const writeHandler = createWriteHandler(config);
+    const revalidationHandler: RevalidationHandler = async (request) => {
+      revalidationCalled = true;
+      return createTestResponse("revalidated content", "max-age=10");
+    };
 
-		const request = new Request("https://example.com/fallback");
-		const response = createTestResponse("original content", "max-age=0.1, stale-while-revalidate=2");
+    const config: CacheConfig = {
+      cacheName: testCacheName,
+      revalidationHandler,
+      // No waitUntil provided - should use queueMicrotask
+    };
 
-		// Cache the response
-		await writeHandler(request, response);
+    const readHandler = createReadHandler(config);
+    const writeHandler = createWriteHandler(config);
 
-		// Wait for content to become stale
-		await wait(150);
+    const request = new Request("https://example.com/fallback");
+    const response = createTestResponse(
+      "original content",
+      "max-age=0.1, stale-while-revalidate=2",
+    );
 
-		// Read should return stale content and trigger revalidation via queueMicrotask
-		const staleResponse = await readHandler(request);
-		assertExists(staleResponse);
-		assertEquals(await staleResponse.text(), "original content");
+    // Cache the response
+    await writeHandler(request, response);
 
-		// Give time for microtask to execute
-		await wait(10);
+    // Wait for content to become stale
+    await wait(150);
 
-		assertEquals(revalidationCalled, true, "Revalidation should be called via queueMicrotask");
+    // Read should return stale content and trigger revalidation via queueMicrotask
+    const staleResponse = await readHandler(request);
+    assertExists(staleResponse);
+    assertEquals(await staleResponse?.text(), "original content");
 
-		await cleanup();
-	});
+    // Give time for microtask to execute
+    await wait(10);
 
-	it("should not trigger revalidation without revalidation handler", async () => {
-		const config: CacheConfig = {
-			cacheName: testCacheName,
-			// No revalidationHandler provided
-		};
+    assertEquals(
+      revalidationCalled,
+      true,
+      "Revalidation should be called via queueMicrotask",
+    );
 
-		const readHandler = createReadHandler(config);
-		const writeHandler = createWriteHandler(config);
+    await cleanup();
+  });
 
-		const request = new Request("https://example.com/no-handler");
-		const response = createTestResponse("content", "max-age=0.1, stale-while-revalidate=2");
+  it("should not trigger revalidation without revalidation handler", async () => {
+    const config: CacheConfig = {
+      cacheName: testCacheName,
+      // No revalidationHandler provided
+    };
 
-		// Cache the response
-		await writeHandler(request, response);
+    const readHandler = createReadHandler(config);
+    const writeHandler = createWriteHandler(config);
 
-		// Wait for content to become stale
-		await wait(150);
+    const request = new Request("https://example.com/no-handler");
+    const response = createTestResponse(
+      "content",
+      "max-age=0.1, stale-while-revalidate=2",
+    );
 
-		// Read should return null since there's no revalidation handler
-		const result = await readHandler(request);
-		assertEquals(result, null);
+    // Cache the response
+    await writeHandler(request, response);
 
-		await cleanup();
-	});
+    // Wait for content to become stale
+    await wait(150);
 
-	it("should handle revalidation with CDN-Cache-Control header", async () => {
-		let revalidationCalled = false;
+    // Read should return null since there's no revalidation handler
+    const result = await readHandler(request);
+    assertEquals(result, null);
 
-		const revalidationHandler: RevalidationHandler = async (request) => {
-			revalidationCalled = true;
-			return createTestResponse("revalidated content", "max-age=10");
-		};
+    await cleanup();
+  });
 
-		const config: CacheConfig = {
-			cacheName: testCacheName,
-			revalidationHandler,
-			waitUntil: (promise: Promise<any>) => {
-				promise.catch(() => {});
-			},
-		};
+  it("should handle revalidation with CDN-Cache-Control header", async () => {
+    let revalidationCalled = false;
 
-		const readHandler = createReadHandler(config);
-		const writeHandler = createWriteHandler(config);
+    const revalidationHandler: RevalidationHandler = async (request) => {
+      revalidationCalled = true;
+      return createTestResponse("revalidated content", "max-age=10");
+    };
 
-		const request = new Request("https://example.com/cdn-cache");
-		const response = new Response("cdn content", {
-			headers: {
-				"content-type": "text/plain",
-				"cdn-cache-control": "max-age=0.1, stale-while-revalidate=2",
-			},
-		});
+    const config: CacheConfig = {
+      cacheName: testCacheName,
+      revalidationHandler,
+      waitUntil: (promise: Promise<any>) => {
+        promise.catch(() => {});
+      },
+    };
 
-		// Cache the response
-		await writeHandler(request, response);
+    const readHandler = createReadHandler(config);
+    const writeHandler = createWriteHandler(config);
 
-		// Wait for content to become stale
-		await wait(150);
+    const request = new Request("https://example.com/cdn-cache");
+    const response = new Response("cdn content", {
+      headers: {
+        "content-type": "text/plain",
+        "cdn-cache-control": "max-age=0.1, stale-while-revalidate=2",
+      },
+    });
 
-		// Read should return stale content and trigger revalidation
-		const staleResponse = await readHandler(request);
-		assertExists(staleResponse);
-		assertEquals(await staleResponse.text(), "cdn content");
+    // Cache the response
+    await writeHandler(request, response);
 
-		// Give time for revalidation
-		await wait(10);
+    // Wait for content to become stale
+    await wait(150);
 
-		assertEquals(revalidationCalled, true, "Revalidation should work with CDN-Cache-Control");
+    // Read should return stale content and trigger revalidation
+    const staleResponse = await readHandler(request);
+    assertExists(staleResponse);
+    assertEquals(await staleResponse?.text(), "cdn content");
 
-		await cleanup();
-	});
+    // Give time for revalidation
+    await wait(10);
+
+    assertEquals(
+      revalidationCalled,
+      true,
+      "Revalidation should work with CDN-Cache-Control",
+    );
+
+    await cleanup();
+  });
 });

@@ -1,21 +1,21 @@
 import type {
-	CacheConfig,
-	MiddlewareHandler,
-	ReadHandler,
-	WriteHandler,
+  CacheConfig,
+  MiddlewareHandler,
+  ReadHandler,
+  WriteHandler,
 } from "./types.ts";
 import {
-	defaultGetCacheKey,
-	getCache,
-	parseResponseHeaders,
-	removeHeaders,
-	validateCacheTags,
+  defaultGetCacheKey,
+  getCache,
+  parseResponseHeaders,
+  removeHeaders,
+  validateCacheTags,
 } from "./utils.ts";
 import {
-	validateConditionalRequest,
-	create304Response,
-	getDefaultConditionalConfig,
-	generateETag,
+  create304Response,
+  generateETag,
+  getDefaultConditionalConfig,
+  validateConditionalRequest,
 } from "./conditional.ts";
 import { updateTagMetadata, updateVaryMetadata } from "./metadata.ts";
 import { safeJsonParse } from "./errors.ts";
@@ -52,94 +52,93 @@ const VARY_METADATA_KEY = "https://cache-internal/cache-vary-metadata";
  * ```
  */
 export function createReadHandler(config: CacheConfig = {}): ReadHandler {
-	const getCacheKey = config.getCacheKey || defaultGetCacheKey;
+  const getCacheKey = config.getCacheKey || defaultGetCacheKey;
 
-	return async (request: Request): Promise<Response | null> => {
-		// Only support GET requests for caching
-		if (request.method !== "GET") {
-			return null; // Non-GET requests are never cached
-		}
+  return async (request: Request): Promise<Response | null> => {
+    // Only support GET requests for caching
+    if (request.method !== "GET") {
+      return null; // Non-GET requests are never cached
+    }
 
-		const cache = await getCache(config);
-		const varyMetadataResponse = await cache.match(VARY_METADATA_KEY);
-		let varyMetadata: Record<string, any> = {};
-		varyMetadata = await safeJsonParse(
-			varyMetadataResponse?.clone() || null,
-			{} as Record<string, any>,
-			"vary metadata parsing in read handler",
-		);
+    const cache = await getCache(config);
+    const varyMetadataResponse = await cache.match(VARY_METADATA_KEY);
+    let varyMetadata: Record<string, any> = {};
+    varyMetadata = await safeJsonParse(
+      varyMetadataResponse?.clone() || null,
+      {} as Record<string, any>,
+      "vary metadata parsing in read handler",
+    );
 
-		const vary = varyMetadata[request.url];
-		const cacheKey = await getCacheKey(request, vary);
-		const cacheRequest = new Request(cacheKey);
+    const vary = varyMetadata[request.url];
+    const cacheKey = await getCacheKey(request, vary);
+    const cacheRequest = new Request(cacheKey);
 
-		const cachedResponse = await cache.match(cacheRequest);
-		if (!cachedResponse) {
-			return null;
-		}
+    const cachedResponse = await cache.match(cacheKey);
+    if (!cachedResponse) {
+      return null;
+    }
 
-		// Check expiration and handle stale-while-revalidate
-		const expiresHeader = cachedResponse.headers.get("expires");
-		const swrHeader = cachedResponse.headers.get("x-swr-expires");
-		
-		if (expiresHeader) {
-			const expiresAt = new Date(expiresHeader);
-			const now = Date.now();
-			
-			if (now >= expiresAt.getTime()) {
-				// Content is expired, check for stale-while-revalidate
-				if (swrHeader && config.revalidationHandler) {
-					const swrExpiresAt = new Date(swrHeader);
-					
-					if (now < swrExpiresAt.getTime()) {
-						// Content is stale but within SWR window
-						// Trigger background revalidation
-						const revalidationPromise = triggerRevalidation(request, config);
-						
-						if (config.waitUntil) {
-							// Use platform-specific waitUntil handler (e.g., Cloudflare Workers)
-							config.waitUntil(revalidationPromise);
-						} else {
-							// Fallback to queueMicrotask for platforms without waitUntil
-							queueMicrotask(() => {
-								revalidationPromise.catch((error) => {
-									console.warn("Background revalidation failed:", error);
-								});
-							});
-						}
-						
-						// Return stale content immediately
-						return cachedResponse;
-					}
-				}
-				
-				// Content is expired beyond SWR window, delete and return null
-				await cache.delete(cacheRequest);
-				return null;
-			}
-		}
+    // Check expiration and handle stale-while-revalidate
+    const expiresHeader = cachedResponse.headers.get("expires");
+    const swrHeader = cachedResponse.headers.get("x-swr-expires");
 
-		// Handle conditional requests (If-None-Match, If-Modified-Since)
-		const features = config.features ?? {};
-		if (features.conditionalRequests !== false) {
-			const conditionalConfig =
-				typeof features.conditionalRequests === "object"
-					? features.conditionalRequests
-					: getDefaultConditionalConfig();
+    if (expiresHeader) {
+      const expiresAt = new Date(expiresHeader);
+      const now = Date.now();
 
-			const validation = validateConditionalRequest(
-				request,
-				cachedResponse,
-				conditionalConfig,
-			);
+      if (now >= expiresAt.getTime()) {
+        // Content is expired, check for stale-while-revalidate
+        if (swrHeader && config.revalidationHandler) {
+          const swrExpiresAt = new Date(swrHeader);
 
-			if (validation.shouldReturn304) {
-				return create304Response(cachedResponse);
-			}
-		}
+          if (now < swrExpiresAt.getTime()) {
+            // Content is stale but within SWR window
+            // Trigger background revalidation
+            const revalidationPromise = triggerRevalidation(request, config);
 
-		return cachedResponse;
-	};
+            if (config.waitUntil) {
+              // Use platform-specific waitUntil handler (e.g., Cloudflare Workers)
+              config.waitUntil(revalidationPromise);
+            } else {
+              // Fallback to queueMicrotask for platforms without waitUntil
+              queueMicrotask(() => {
+                revalidationPromise.catch((error) => {
+                  console.warn("Background revalidation failed:", error);
+                });
+              });
+            }
+
+            // Return stale content immediately
+            return cachedResponse;
+          }
+        }
+        cachedResponse.body?.cancel();
+        // Content is expired beyond SWR window, delete and return null
+        await cache.delete(cacheRequest);
+        return null;
+      }
+    }
+
+    // Handle conditional requests (If-None-Match, If-Modified-Since)
+    const features = config.features ?? {};
+    if (features.conditionalRequests !== false) {
+      const conditionalConfig = typeof features.conditionalRequests === "object"
+        ? features.conditionalRequests
+        : getDefaultConditionalConfig();
+
+      const validation = validateConditionalRequest(
+        request,
+        cachedResponse,
+        conditionalConfig,
+      );
+
+      if (validation.shouldReturn304) {
+        return create304Response(cachedResponse);
+      }
+    }
+
+    return cachedResponse;
+  };
 }
 
 /**
@@ -175,96 +174,92 @@ export function createReadHandler(config: CacheConfig = {}): ReadHandler {
  * ```
  */
 export function createWriteHandler(config: CacheConfig = {}): WriteHandler {
-	const getCacheKey = config.getCacheKey || defaultGetCacheKey;
+  const getCacheKey = config.getCacheKey || defaultGetCacheKey;
 
-	return async (request: Request, response: Response): Promise<Response> => {
-		// Only support GET requests for caching
-		if (request.method !== "GET") {
-			return response; // Return response as-is for non-GET requests
-		}
+  return async (request: Request, response: Response): Promise<Response> => {
+    // Only support GET requests for caching
+    if (request.method !== "GET") {
+      return response; // Return response as-is for non-GET requests
+    }
 
-		const cache = await getCache(config);
-		const cacheInfo = parseResponseHeaders(response, config);
+    const cache = await getCache(config);
+    const cacheInfo = parseResponseHeaders(response, config);
 
-		if (!cacheInfo.shouldCache) {
-			return removeHeaders(response, cacheInfo.headersToRemove);
-		}
+    if (!cacheInfo.shouldCache) {
+      return removeHeaders(response, cacheInfo.headersToRemove);
+    }
 
-		const cacheKey = await getCacheKey(request, cacheInfo.vary);
+    const cacheKey = await getCacheKey(request, cacheInfo.vary);
 
-		const responseToCache = response.clone();
-		const headers = new Headers(responseToCache.headers);
+    const responseToCache = response.clone();
+    const headers = new Headers(responseToCache.headers);
 
-		// Handle ETag generation if needed
-		if (cacheInfo.shouldGenerateETag) {
-			const features = config.features ?? {};
-			const conditionalConfig =
-				typeof features.conditionalRequests === "object"
-					? features.conditionalRequests
-					: {};
+    // Handle ETag generation if needed
+    if (cacheInfo.shouldGenerateETag) {
+      const features = config.features ?? {};
+      const conditionalConfig = typeof features.conditionalRequests === "object"
+        ? features.conditionalRequests
+        : {};
 
-			if (conditionalConfig.etagGenerator) {
-				const etag = await conditionalConfig.etagGenerator(responseToCache);
-				headers.set("etag", etag);
-			} else {
-				const etag = await generateETag(responseToCache);
-				headers.set("etag", etag);
-			}
-		}
+      if (conditionalConfig.etagGenerator) {
+        const etag = await conditionalConfig.etagGenerator(responseToCache);
+        headers.set("etag", etag);
+      } else {
+        const etag = await generateETag(responseToCache);
+        headers.set("etag", etag);
+      }
+    }
 
-		if (cacheInfo.ttl) {
-			const expiresAt = new Date(Date.now() + cacheInfo.ttl * 1000);
-			headers.set("expires", expiresAt.toUTCString());
-		}
+    if (cacheInfo.ttl) {
+      const expiresAt = new Date(Date.now() + cacheInfo.ttl * 1000);
+      headers.set("expires", expiresAt.toUTCString());
+    }
 
-		// Add SWR expiration if stale-while-revalidate is specified
-		if (cacheInfo.staleWhileRevalidate && cacheInfo.ttl) {
-			const swrExpiresAt = new Date(
-				Date.now() + (cacheInfo.ttl + cacheInfo.staleWhileRevalidate) * 1000
-			);
-			headers.set("x-swr-expires", swrExpiresAt.toUTCString());
-		}
+    // Add SWR expiration if stale-while-revalidate is specified
+    if (cacheInfo.staleWhileRevalidate && cacheInfo.ttl) {
+      const swrExpiresAt = new Date(
+        Date.now() + (cacheInfo.ttl + cacheInfo.staleWhileRevalidate) * 1000,
+      );
+      headers.set("x-swr-expires", swrExpiresAt.toUTCString());
+    }
 
-		if (cacheInfo.tags.length > 0) {
-			const validatedTags = validateCacheTags(cacheInfo.tags);
-			headers.set("cache-tag", validatedTags.join(", "));
-		}
+    if (cacheInfo.tags.length > 0) {
+      const validatedTags = validateCacheTags(cacheInfo.tags);
+      headers.set("cache-tag", validatedTags.join(", "));
+    }
 
-		const cacheResponse = new Response(responseToCache.body, {
-			status: responseToCache.status,
-			statusText: responseToCache.statusText,
-			headers,
-		});
+    const cacheResponse = new Response(responseToCache.body, {
+      status: responseToCache.status,
+      statusText: responseToCache.statusText,
+      headers,
+    });
 
-		const cacheRequest = new Request(cacheKey);
-		await cache.put(cacheRequest, cacheResponse);
+    await cache.put(cacheKey, cacheResponse);
 
-		if (cacheInfo.tags.length > 0) {
-			const validatedTags = validateCacheTags(cacheInfo.tags);
-			// Use the same key that's actually stored in cache (normalized URL)
-			const actualCacheKey = cacheRequest.url;
+    if (cacheInfo.tags.length > 0) {
+      const validatedTags = validateCacheTags(cacheInfo.tags);
 
-			// Use atomic metadata update to prevent race conditions
-			await updateTagMetadata(
-				cache,
-				METADATA_KEY,
-				validatedTags,
-				actualCacheKey,
-			);
-		}
+      // Use atomic metadata update to prevent race conditions
+      await updateTagMetadata(
+        cache,
+        METADATA_KEY,
+        validatedTags,
+        cacheKey,
+      );
+    }
 
-		if (cacheInfo.vary) {
-			// Use atomic metadata update with built-in memory leak prevention
-			await updateVaryMetadata(
-				cache,
-				VARY_METADATA_KEY,
-				request.url,
-				cacheInfo.vary,
-			);
-		}
+    if (cacheInfo.vary) {
+      // Use atomic metadata update with built-in memory leak prevention
+      await updateVaryMetadata(
+        cache,
+        VARY_METADATA_KEY,
+        request.url,
+        cacheInfo.vary,
+      );
+    }
 
-		return removeHeaders(response, cacheInfo.headersToRemove);
-	};
+    return removeHeaders(response, cacheInfo.headersToRemove);
+  };
 }
 
 /**
@@ -303,45 +298,45 @@ export function createWriteHandler(config: CacheConfig = {}): WriteHandler {
  * ```
  */
 export function createMiddlewareHandler(
-	config: CacheConfig = {},
+  config: CacheConfig = {},
 ): MiddlewareHandler {
-	const readHandler = createReadHandler(config);
-	const writeHandler = createWriteHandler(config);
+  const readHandler = createReadHandler(config);
+  const writeHandler = createWriteHandler(config);
 
-	return async (
-		request: Request,
-		next: () => Promise<Response>,
-	): Promise<Response> => {
-		const cachedResponse = await readHandler(request);
-		if (cachedResponse) {
-			return cachedResponse;
-		}
+  return async (
+    request: Request,
+    next: () => Promise<Response>,
+  ): Promise<Response> => {
+    const cachedResponse = await readHandler(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
 
-		const response = await next();
+    const response = await next();
 
-		return writeHandler(request, response);
-	};
+    return writeHandler(request, response);
+  };
 }
 
 /**
  * Trigger background revalidation for stale-while-revalidate support.
  * This function runs asynchronously and updates the cache with fresh content.
- * 
+ *
  * @param request - The original request to revalidate
  * @param config - The cache configuration with revalidation handler
  */
 async function triggerRevalidation(
-	request: Request,
-	config: CacheConfig,
+  request: Request,
+  config: CacheConfig,
 ): Promise<void> {
-	if (!config.revalidationHandler) {
-		return;
-	}
+  if (!config.revalidationHandler) {
+    return;
+  }
 
-	// Call the revalidation handler to fetch fresh content
-	const freshResponse = await config.revalidationHandler(request);
-	
-	// Process the fresh response through the write handler logic
-	const writeHandler = createWriteHandler(config);
-	await writeHandler(request, freshResponse);
+  // Call the revalidation handler to fetch fresh content
+  const freshResponse = await config.revalidationHandler(request);
+
+  // Process the fresh response through the write handler logic
+  const writeHandler = createWriteHandler(config);
+  await writeHandler(request, freshResponse);
 }

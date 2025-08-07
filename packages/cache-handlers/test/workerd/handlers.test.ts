@@ -1,8 +1,8 @@
-import { describe, test, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 import {
+	createMiddlewareHandler,
 	createReadHandler,
 	createWriteHandler,
-	createMiddlewareHandler,
 } from "../../src/handlers.js";
 
 describe("Cache Handlers - Workerd Environment", () => {
@@ -38,7 +38,7 @@ describe("Cache Handlers - Workerd Environment", () => {
 				},
 			});
 
-			await cache.put(new Request(cacheKey), cachedResponse);
+			await cache.put(new URL(cacheKey), cachedResponse);
 
 			const request = new Request(cacheKey);
 			const result = await readHandler(request);
@@ -62,7 +62,7 @@ describe("Cache Handlers - Workerd Environment", () => {
 				},
 			});
 
-			await cache.put(new Request(cacheKey), expiredResponse.clone());
+			await cache.put(new URL(cacheKey), expiredResponse.clone());
 
 			const request = new Request("https://example.com/api/users");
 			const result = await readHandler(request);
@@ -70,7 +70,7 @@ describe("Cache Handlers - Workerd Environment", () => {
 			expect(result).toBe(null);
 
 			// Should also remove from cache
-			const stillCached = await cache.match(new Request(cacheKey));
+			const stillCached = await cache.match(new URL(cacheKey));
 			expect(stillCached).toBeUndefined();
 		});
 	});
@@ -98,7 +98,7 @@ describe("Cache Handlers - Workerd Environment", () => {
 			// Should be cached
 			const cache = await caches.open("test");
 			const cacheKey = "https://example.com/api/users";
-			const cached = await cache.match(new Request(cacheKey));
+			const cached = await cache.match(new URL(cacheKey));
 			expect(cached).toBeTruthy();
 			expect(await cached!.text()).toBe("test data");
 
@@ -126,7 +126,7 @@ describe("Cache Handlers - Workerd Environment", () => {
 			// Should not be cached
 			const cache = await caches.open("test");
 			const cacheKey = "https://example.com/api/users";
-			const cached = await cache.match(new Request(cacheKey));
+			const cached = await cache.match(new URL(cacheKey));
 			expect(cached).toBeUndefined();
 		});
 	});
@@ -147,7 +147,7 @@ describe("Cache Handlers - Workerd Environment", () => {
 				},
 			});
 
-			await cache.put(new Request(cacheKey), cachedResponse);
+			await cache.put(new URL(cacheKey), cachedResponse);
 
 			const request = new Request("https://example.com/api/users");
 			let nextCalled = false;
@@ -188,7 +188,7 @@ describe("Cache Handlers - Workerd Environment", () => {
 			// Should be cached for next time
 			const cache = await caches.open("test");
 			const cacheKey = "https://example.com/api/users";
-			const cached = await cache.match(new Request(cacheKey));
+			const cached = await cache.match(new URL(cacheKey));
 			expect(cached).toBeTruthy();
 
 			expect(cached!.headers.get("cache-tag")).toBe("user:123");

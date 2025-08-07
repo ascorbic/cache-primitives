@@ -1,15 +1,15 @@
-import { describe, test, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 import {
+	compareETags,
+	create304Response,
 	generateETag,
 	parseETag,
-	compareETags,
 	validateConditionalRequest,
-	create304Response,
 } from "../../src/conditional.js";
 import {
+	createMiddlewareHandler,
 	createReadHandler,
 	createWriteHandler,
-	createMiddlewareHandler,
 } from "../../src/handlers.js";
 
 describe("Conditional Requests - Workerd Environment", () => {
@@ -165,7 +165,7 @@ describe("Conditional Requests - Workerd Environment", () => {
 				},
 			});
 
-			await cache.put(new Request(cacheKey), cachedResponse);
+			await cache.put(new URL(cacheKey), cachedResponse);
 
 			// Request with matching If-None-Match should get 304
 			const conditionalRequest = new Request(cacheKey, {
@@ -383,7 +383,7 @@ describe("Conditional Requests - Workerd Environment", () => {
 				},
 			});
 
-			await cache.put(new Request(cacheKey), cachedResponse);
+			await cache.put(new URL(cacheKey), cachedResponse);
 
 			// Request with If-None-Match should get full response (not 304)
 			const conditionalRequest = new Request(cacheKey, {

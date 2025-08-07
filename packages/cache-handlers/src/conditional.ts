@@ -257,7 +257,7 @@ export function create304Response(cachedResponse: Response): Response {
 	if (!headers.has("date")) {
 		headers.set("date", new Date().toUTCString());
 	}
-
+	cachedResponse.body?.cancel();
 	// 304 responses MUST NOT contain a message body
 	return new Response(undefined, {
 		status: 304,
