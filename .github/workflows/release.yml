@@ -37,6 +37,10 @@ jobs:
           node-version: latest
           cache: "pnpm"
 
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: vx.x.x
+
       - name: Install Dependencies
         run: pnpm install
 
@@ -62,4 +66,4 @@ jobs:
           NPM_CONFIG_PROVENANCE: true
       - name: Publish to JSR
         if: steps.changesets.outputs.published == 'true'
-        run: npx jsr publish
+        run: deno publish

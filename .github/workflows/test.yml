@@ -24,6 +24,9 @@ jobs:
         run: |
           corepack enable
           pnpm install
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: vx.x.x
       - name: Build
         run: pnpm build
       - name: Test
