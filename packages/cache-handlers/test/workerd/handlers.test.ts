@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { createCacheHandler } from "../../src/handlers.ts";
 
 describe("Cache Handler - Workerd Environment", () => {
@@ -10,22 +10,18 @@ describe("Cache Handler - Workerd Environment", () => {
 		test("miss invokes handler and caches", async () => {
 			const cacheName = `wk-miss-${Date.now()}`;
 			const handle = createCacheHandler({ cacheName });
-			let invoked = false;
-			const resp = await handle(
-				new Request("https://example.com/api/miss") as any,
-				{
-					handler: (async () => {
-						invoked = true;
-						return new Response("fresh", {
-							headers: {
-								"cache-control": "max-age=60, public",
-								"cache-tag": "x",
-							},
-						});
-					}) as any,
-				},
+			const missHandler = vi.fn(() =>
+				new Response("fresh", {
+					headers: {
+						"cache-control": "max-age=60, public",
+						"cache-tag": "x",
+					},
+				})
 			);
-			expect(invoked).toBe(true);
+			const resp = await handle(new Request("https://example.com/api/miss"), {
+				handler: missHandler,
+			});
+			expect(missHandler).toHaveBeenCalledTimes(1);
 			expect(await resp.text()).toBe("fresh");
 			const cache = await caches.open(cacheName);
 			expect(await cache.match("https://example.com/api/miss")).toBeTruthy();
@@ -42,14 +38,11 @@ describe("Cache Handler - Workerd Environment", () => {
 					headers: { expires: new Date(Date.now() + 60000).toUTCString() },
 				}),
 			);
-			let invoked = false;
-			const resp = await handle(new Request(url) as any, {
-				handler: (async () => {
-					invoked = true;
-					return new Response("fresh");
-				}) as any,
+			const hitHandler = vi.fn(() => new Response("fresh"));
+			const resp = await handle(new Request(url), {
+				handler: hitHandler,
 			});
-			expect(invoked).toBe(false);
+			expect(hitHandler).not.toHaveBeenCalled();
 			expect(await resp.text()).toBe("cached");
 		});
 	});
@@ -67,8 +60,8 @@ describe("Cache Handler - Workerd Environment", () => {
 				},
 			});
 
-			const result = await handle(request as any, {
-				handler: (async () =>
+			const result = await handle(request, {
+				handler: () =>
 					new Response("cloudflare data", {
 						status: 200,
 						headers: {
@@ -76,7 +69,7 @@ describe("Cache Handler - Workerd Environment", () => {
 							"cache-tag": "cloudflare",
 							"CF-Cache-Status": "MISS",
 						},
-					})) as any,
+					}),
 			});
 
 			expect(await result.text()).toBe("cloudflare data");

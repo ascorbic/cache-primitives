@@ -174,7 +174,6 @@ console.log(stats.totalEntries, stats.entriesByTag);
 | `cacheName`                                 | Named cache to open (default `cache-primitives-default`) |
 | `cache`                                     | Provide a `Cache` instance directly                      |
 | `handler`                                   | Function invoked on misses / background revalidation     |
-| `revalidationHandler`                       | Alternate function used only for background refresh      |
 | `defaultTtl`                                | Fallback TTL (seconds) when no cache headers present     |
 | `maxTtl`                                    | Upper bound to clamp any TTL (seconds)                   |
 | `getCacheKey`                               | Custom key generator `(request) => string`               |

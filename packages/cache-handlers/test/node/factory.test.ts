@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, test } from "vitest";
-import { caches, Request, Response } from "undici";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import { caches } from "undici";
 import { createCacheHandler } from "../../src/index.ts";
 
 describe("Unified Cache Handler - Node.js with undici", () => {
@@ -12,32 +12,23 @@ describe("Unified Cache Handler - Node.js with undici", () => {
 		const cacheName = "test";
 		const handle = createCacheHandler({ cacheName });
 		const request = new Request("http://example.com/api/data");
-		let invoked = 0;
-		// First call (miss)
-		const miss = await handle(request as any, {
-			handler: (() => {
-				invoked++;
-				return Promise.resolve(
-					new Response("integration test data", {
-						headers: {
-							"cache-control": "max-age=3600, public",
-							"cache-tag": "integration",
-							"content-type": "application/json",
-						},
-					}),
-				);
-			}) as any,
-		});
-		expect(invoked).toBe(1);
-		expect(await miss.clone().text()).toBe("integration test data");
+		const handler = vi.fn(() =>
+			new Response("integration test data", {
+				headers: {
+					"cache-control": "max-age=3600, public",
+					"cache-tag": "integration",
+					"content-type": "application/json",
+				},
+			})
+		);
+		const miss = await handle(request, { handler });
+		expect(handler).toHaveBeenCalledTimes(1);
+		expect(await miss.text()).toBe("integration test data");
 		// Second call (hit)
-		const hit = await handle(request as any, {
-			handler: (() => {
-				invoked++;
-				return Promise.resolve(new Response("should not be called"));
-			}) as any,
+		const hit = await handle(request, {
+			handler: vi.fn(() => new Response("should not be called")),
 		});
-		expect(invoked).toBe(1);
+		expect(handler).toHaveBeenCalledTimes(1); // still only initial miss call
 		expect(await hit.text()).toBe("integration test data");
 	});
 });

@@ -36,7 +36,7 @@ describe("Cache Invalidation - Workerd Environment", () => {
 		expect(cached).toBeTruthy();
 
 		// Call invalidateByTag - it may return 0 due to workerd limitations
-		const result = await invalidateByTag("test:1", { cacheNames: [cacheName] });
+		const result = await invalidateByTag("test:1", { cacheName });
 		expect(typeof result).toBe("number");
 		expect(result).toBeGreaterThanOrEqual(0);
 	});
@@ -45,7 +45,7 @@ describe("Cache Invalidation - Workerd Environment", () => {
 		expect(typeof invalidateByPath).toBe("function");
 
 		const result = await invalidateByPath("/api/test", {
-			cacheNames: [`path-test-${Date.now()}`],
+			cacheName: `path-test-${Date.now()}`,
 		});
 		expect(typeof result).toBe("number");
 		expect(result).toBeGreaterThanOrEqual(0);
@@ -55,7 +55,7 @@ describe("Cache Invalidation - Workerd Environment", () => {
 		expect(typeof invalidateAll).toBe("function");
 
 		const result = await invalidateAll({
-			cacheNames: [`all-test-${Date.now()}`],
+			cacheName: `all-test-${Date.now()}`,
 		});
 		expect(typeof result).toBe("number");
 		expect(result).toBeGreaterThanOrEqual(0);
@@ -65,23 +65,13 @@ describe("Cache Invalidation - Workerd Environment", () => {
 		expect(typeof getCacheStats).toBe("function");
 
 		const stats = await getCacheStats({
-			cacheNames: [`stats-test-${Date.now()}`],
+			cacheName: `stats-test-${Date.now()}`,
 		});
 		expect(typeof stats).toBe("object");
 		expect(typeof stats.totalEntries).toBe("number");
 
-		// The structure may vary between environments
-		// In workerd: { totalEntries: 0, entriesByTag: {} }
-		// In other environments: { totalEntries: 0, totalCaches: 0, tags: Map() }
-		if ("totalCaches" in stats) {
-			expect(typeof stats.totalCaches).toBe("number");
-		}
-		if ("tags" in stats) {
-			expect(stats.tags instanceof Map).toBe(true);
-		}
-		if ("entriesByTag" in stats) {
-			expect(typeof stats.entriesByTag).toBe("object");
-		}
+		expect(typeof stats.entriesByTag).toBe("object");
+		expect(Array.isArray(stats.entriesByTag)).toBe(false);
 	});
 
 	test("workerd environment supports complex cache operations", async () => {
@@ -101,23 +91,20 @@ describe("Cache Invalidation - Workerd Environment", () => {
 			},
 		);
 
-		const complexResponse = new Response(
-			JSON.stringify({
-				id: 123,
-				name: "Test User",
-				profile: { avatar: "test.jpg" },
-				settings: { theme: "dark" },
-			}),
-			{
-				headers: {
-					"content-type": "application/json",
-					"cache-tag": "user:123",
-					expires: new Date(Date.now() + 1800000).toUTCString(), // 30 minutes
-					etag: '"abc123"',
-					"last-modified": new Date().toUTCString(),
-				},
+		const complexResponse = Response.json({
+			id: 123,
+			name: "Test User",
+			profile: { avatar: "test.jpg" },
+			settings: { theme: "dark" },
+		}, {
+			headers: {
+				"content-type": "application/json",
+				"cache-tag": "user:123",
+				expires: new Date(Date.now() + 1800000).toUTCString(), // 30 minutes
+				etag: '"abc123"',
+				"last-modified": new Date().toUTCString(),
 			},
-		);
+		});
 
 		await cache.put(complexRequest, complexResponse.clone());
 

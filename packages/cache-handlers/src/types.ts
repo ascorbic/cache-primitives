@@ -86,19 +86,12 @@ export interface CacheConfig {
 	maxTtl?: number;
 
 	/**
-	 * Revalidation handler for stale-while-revalidate support.
-	 * Called when cached content is stale but within the SWR window.
-	 * If not provided, revalidation will be skipped.
-	 */
-	revalidationHandler?: RevalidationHandler;
-
-	/**
 	 * WaitUntil handler for background tasks (like revalidation).
 	 * Similar to Cloudflare Workers' ctx.waitUntil().
 	 * Allows the platform to keep processes alive for background work.
 	 * If not provided, queueMicrotask will be used as fallback.
 	 */
-	waitUntil?: (promise: Promise<any>) => void;
+	waitUntil?: (promise: Promise<unknown>) => void;
 }
 
 /**
@@ -265,21 +258,6 @@ export interface ParsedCacheHeaders {
 }
 
 /**
- * Revalidation handler function for stale-while-revalidate support.
- * Called when content needs to be revalidated in the background.
- *
- * @example
- * ```typescript
- * const revalidateHandler: RevalidationHandler = async (request) => fetch(request.url);
- * ```
- */
-export interface RevalidationHandler {
-	(request: Request): Promise<Response>;
-}
-
-// --- Higher-level handler API ---
-
-/**
  * Render / handling mode information passed to user handler.
  * - miss: cache miss foreground render
  * - stale: background refresh in progress
@@ -298,7 +276,7 @@ export interface HandlerInfo {
 export type HandlerFunction = (
 	request: Request,
 	info: HandlerInfo,
-) => Promise<Response>;
+) => Promise<Response> | Response;
 
 /**
  * SWR policy (reserved for future strategies).
@@ -323,12 +301,12 @@ export interface CreateCacheHandlerOptions extends CacheConfig {
 	/**
 	 * Background scheduler analogous to waitUntil.
 	 */
-	runInBackground?: (p: Promise<any>) => void;
+	runInBackground?: (p: Promise<unknown>) => void;
 }
 
 export interface CacheHandleFunctionOptions {
 	handler?: HandlerFunction;
-	runInBackground?: (p: Promise<any>) => void;
+	runInBackground?: (p: Promise<unknown>) => void;
 	swr?: SWRPolicy;
 }
 /**

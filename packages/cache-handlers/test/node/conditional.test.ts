@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
 	compareETags,
 	create304Response,
@@ -147,14 +147,9 @@ describe("Conditional Requests - Node.js with undici", () => {
 				}),
 			);
 
-			let invoked = false;
-			const result = await handle(new Request(cacheKey) as any, {
-				handler: (async () => {
-					invoked = true;
-					return new Response("fresh");
-				}) as any,
-			});
-			expect(invoked).toBe(false);
+			const handler = vi.fn(() => new Response("fresh"));
+			const result = await handle(new Request(cacheKey), { handler });
+			expect(handler).not.toHaveBeenCalled();
 			// Some platform type mismatches may bypass conditional logic; accept 200 fallback
 			expect([200, 304]).toContain(result.status);
 			expect(result.headers.get("etag")).toBe('"test-etag-123"');
@@ -167,14 +162,14 @@ describe("Conditional Requests - Node.js with undici", () => {
 				features: { conditionalRequests: { etag: "generate" } },
 			});
 			const url = `https://example.com/api/generate-etag-${Date.now()}`;
-			const first = await handle(new Request(url) as any, {
-				handler: (async () =>
+			const first = await handle(new Request(url), {
+				handler: () =>
 					new Response("etag me", {
 						headers: {
 							"cache-control": "max-age=3600, public",
 							"content-type": "application/json",
 						},
-					})) as any,
+					}),
 			});
 			// Returned response should not necessarily include generated etag
 			expect(first.headers.get("etag")).toBe(null);
@@ -191,30 +186,25 @@ describe("Conditional Requests - Node.js with undici", () => {
 			});
 			const url =
 				`https://example.com/api/middleware-conditional-${Date.now()}`;
-			let count = 0;
-			const first = await handle(new Request(url) as any, {
-				handler: (async () => {
-					count++;
-					return new Response("fresh data", {
-						headers: { "cache-control": "max-age=3600, public" },
-					});
-				}) as any,
-			});
-			expect(count).toBe(1);
+			const handler = vi.fn(() =>
+				new Response("fresh data", {
+					headers: { "cache-control": "max-age=3600, public" },
+				})
+			);
+			await handle(new Request(url), { handler });
+			expect(handler).toHaveBeenCalledTimes(1);
 			const cache = await caches.open(cacheName);
 			const cached = await cache.match(url);
 			const etag = cached?.headers.get("etag");
 			if (etag) {
+				const dontCallHandler = vi.fn(() => new Response("should not"));
 				const second = await handle(
-					new Request(url, { headers: { "if-none-match": etag } }) as any,
+					new Request(url, { headers: { "if-none-match": etag } }),
 					{
-						handler: (async () => {
-							count++;
-							return new Response("should not");
-						}) as any,
+						handler: dontCallHandler,
 					},
 				);
-				expect(count).toBe(1);
+				expect(dontCallHandler).not.toHaveBeenCalled();
 				expect(second.status).toBe(304);
 			}
 		});
@@ -236,21 +226,16 @@ describe("Conditional Requests - Node.js with undici", () => {
 					},
 				}),
 			);
-			let invoked = false;
+			const handler = vi.fn(() => new Response("fresh"));
 			const result = await handle(
 				new Request(cacheKey, {
 					headers: { "if-none-match": '"should-be-ignored"' },
-				}) as any,
-				{
-					handler: (async () => {
-						invoked = true;
-						return new Response("fresh");
-					}) as any,
-				},
+				}),
+				{ handler },
 			);
 			expect(result.status).toBe(200);
 			expect(await result.text()).toBe("cached data");
-			expect(invoked).toBe(false); // served from cache, no 304
+			expect(handler).not.toHaveBeenCalled(); // served from cache, no 304
 		});
 	});
 });

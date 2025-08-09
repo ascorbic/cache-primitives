@@ -174,7 +174,7 @@ Deno.test("invalidateByPath - exact path match only", async () => {
 Deno.test("invalidateAll - removes all entries", async () => {
 	const cache = await setupTestCache();
 
-	const deletedCount = await invalidateAll({ cacheName: "test" });
+	const deletedCount = await invalidateAll({ cache });
 
 	assertEquals(deletedCount, 4);
 	// Verify entries are gone
@@ -188,7 +188,7 @@ Deno.test("invalidateAll - removes all entries", async () => {
 Deno.test("getCacheStats - returns correct statistics", async () => {
 	const cache = await setupTestCache();
 
-	const stats = await getCacheStats({ cacheName: "test" });
+	const stats = await getCacheStats({ cache });
 
 	assertEquals(stats.totalEntries, 4);
 	assertEquals(stats.entriesByTag.user, 2);

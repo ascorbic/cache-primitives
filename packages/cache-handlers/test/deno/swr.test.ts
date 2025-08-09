@@ -3,7 +3,7 @@ import { describe, it } from "jsr:@std/testing/bdd";
 import { createCacheHandler } from "../../src/index.ts";
 import { writeToCache } from "../../src/write.ts";
 import { readFromCache } from "../../src/read.ts";
-import type { CacheConfig, RevalidationHandler } from "../../src/types.ts";
+import type { CacheConfig } from "../../src/types.ts";
 
 describe("Stale-While-Revalidate Support", () => {
 	const testCacheName = "swr-test-cache";
@@ -77,7 +77,7 @@ describe("Stale-While-Revalidate Support", () => {
 		let revalidationRequest: Request | undefined;
 		let waitUntilCalled = false;
 
-		const revalidationHandler: RevalidationHandler = (request) => {
+		const handler = (request: Request) => {
 			revalidationCalled = true;
 			revalidationRequest = request;
 			return Promise.resolve(createTestResponse(
@@ -96,7 +96,7 @@ describe("Stale-While-Revalidate Support", () => {
 
 		const handle = createCacheHandler({
 			cacheName: testCacheName,
-			handler: revalidationHandler,
+			handler,
 			runInBackground: (p) => waitUntil(p),
 		});
 
@@ -154,8 +154,7 @@ describe("Stale-While-Revalidate Support", () => {
 
 	it("should fallback to queueMicrotask when waitUntil is not provided", async () => {
 		let revalidationCalled = false;
-
-		const revalidationHandler: RevalidationHandler = (_request) => {
+		const handler = (_request: Request) => {
 			revalidationCalled = true;
 			return Promise.resolve(
 				createTestResponse("revalidated content", "max-age=10"),
@@ -164,10 +163,7 @@ describe("Stale-While-Revalidate Support", () => {
 
 		// No waitUntil provided - should use queueMicrotask
 
-		const handle = createCacheHandler({
-			cacheName: testCacheName,
-			handler: revalidationHandler,
-		});
+		const handle = createCacheHandler({ cacheName: testCacheName, handler });
 
 		const request = new Request("https://example.com/fallback");
 		const response = createTestResponse(
@@ -227,8 +223,7 @@ describe("Stale-While-Revalidate Support", () => {
 
 	it("should handle revalidation with CDN-Cache-Control header", async () => {
 		let revalidationCalled = false;
-
-		const revalidationHandler: RevalidationHandler = (_request) => {
+		const handler = (_request: Request) => {
 			revalidationCalled = true;
 			return Promise.resolve(
 				createTestResponse("revalidated content", "max-age=10"),
@@ -241,7 +236,7 @@ describe("Stale-While-Revalidate Support", () => {
 
 		const handle = createCacheHandler({
 			cacheName: testCacheName,
-			handler: revalidationHandler,
+			handler,
 			runInBackground: (p) => waitUntil(p),
 		});
 

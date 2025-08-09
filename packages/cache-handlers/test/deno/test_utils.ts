@@ -3,21 +3,21 @@
 export class FailingCache implements Cache {
 	constructor(private errorOnMethod: string) {}
 
-	match(request: RequestInfo | URL): Promise<Response | undefined> {
+	match(_request: RequestInfo | URL): Promise<Response | undefined> {
 		if (this.errorOnMethod === "match") {
 			throw new Error("Cache match failed");
 		}
 		return Promise.resolve(undefined);
 	}
 
-	put(request: RequestInfo | URL, response: Response): Promise<void> {
+	put(_request: RequestInfo | URL, _response: Response): Promise<void> {
 		if (this.errorOnMethod === "put") {
 			throw new Error("Cache put failed");
 		}
 		return Promise.resolve();
 	}
 
-	delete(request: RequestInfo | URL): Promise<boolean> {
+	delete(_request: RequestInfo | URL): Promise<boolean> {
 		if (this.errorOnMethod === "delete") {
 			throw new Error("Cache delete failed");
 		}
@@ -32,8 +32,8 @@ export class FailingCache implements Cache {
 	}
 
 	matchAll(
-		request?: RequestInfo | URL,
-		options?: CacheQueryOptions,
+		_request?: RequestInfo | URL,
+		_options?: CacheQueryOptions,
 	): Promise<readonly Response[]> {
 		if (this.errorOnMethod === "matchAll") {
 			throw new Error("Cache matchAll failed");

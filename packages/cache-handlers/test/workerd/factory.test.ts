@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { createCacheHandler } from "../../src/index.ts";
 
 describe("Unified Cache Handler - Workerd Environment", () => {
@@ -11,35 +11,29 @@ describe("Unified Cache Handler - Workerd Environment", () => {
 		const cacheName = `test-${Date.now()}`;
 		const handle = createCacheHandler({ cacheName });
 		const url = `https://example.com/api/workerd-integration-${Date.now()}`;
-		let invoked = 0;
-		const miss = await handle(new Request(url) as any, {
-			handler: () => {
-				invoked++;
-				return Promise.resolve(
-					new Response("workerd integration test data", {
-						headers: {
-							"cache-control": "max-age=3600, public",
-							"content-type": "application/json",
-							"cache-tag": "integration:workerd",
-							server: "workerd/1.0",
-						},
-					}),
-				);
-			},
-		});
-		expect(invoked).toBe(1);
+		const handler = vi.fn(() =>
+			Promise.resolve(
+				new Response("workerd integration test data", {
+					headers: {
+						"cache-control": "max-age=3600, public",
+						"content-type": "application/json",
+						"cache-tag": "integration:workerd",
+						server: "workerd/1.0",
+					},
+				}),
+			)
+		);
+		const miss = await handle(new Request(url), { handler });
+		expect(handler).toHaveBeenCalledTimes(1);
 		expect(await miss.clone().text()).toBe("workerd integration test data");
-		const hit = await handle(new Request(url) as any, {
-			handler: () => {
-				invoked++;
-				return Promise.resolve(new Response("should not run"));
-			},
+		const hit = await handle(new Request(url), {
+			handler: vi.fn(() => Promise.resolve(new Response("should not run"))),
 		});
-		expect(invoked).toBe(1);
+		expect(handler).toHaveBeenCalledTimes(1);
 		expect(await hit.text()).toBe("workerd integration test data");
 	});
 
-	test("workerd environment provides standard Web APIs", async () => {
+	test("workerd environment provides standard Web APIs", () => {
 		// Test that workerd provides the expected global APIs
 		expect(typeof caches).toBe("object");
 		expect(typeof caches.open).toBe("function");
@@ -72,24 +66,21 @@ describe("Unified Cache Handler - Workerd Environment", () => {
 				},
 			},
 		);
-		const response = await handle(request as any, {
+		const response = await handle(request, {
 			handler: () =>
 				Promise.resolve(
-					new Response(
-						JSON.stringify({
-							message: "Hello from origin",
-							timestamp: Date.now(),
-							country: "US",
-						}),
-						{
-							headers: {
-								"content-type": "application/json",
-								"cache-control": "public, max-age=300",
-								"cache-tag": "api:data",
-								"x-origin": "cloudflare-worker",
-							},
+					Response.json({
+						message: "Hello from origin",
+						timestamp: Date.now(),
+						country: "US",
+					}, {
+						headers: {
+							"content-type": "application/json",
+							"cache-control": "public, max-age=300",
+							"cache-tag": "api:data",
+							"x-origin": "cloudflare-worker",
 						},
-					),
+					}),
 				),
 		});
 		expect(response.headers.get("content-type")).toBe("application/json");

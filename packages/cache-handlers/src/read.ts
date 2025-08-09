@@ -19,16 +19,31 @@ export async function readFromCache(
 	const getCacheKey = config.getCacheKey || defaultGetCacheKey;
 	const cache = await getCache(config);
 	const varyMetadataResponse = await cache.match(VARY_METADATA_KEY);
-	// deno-lint-ignore no-explicit-any
-	let varyMetadata: Record<string, any> = {};
+	interface VaryEntry {
+		timestamp?: number;
+		headers?: unknown;
+		cookies?: unknown;
+		query?: unknown;
+	}
+	function isStringArray(value: unknown): value is string[] {
+		return Array.isArray(value) && value.every((v) => typeof v === "string");
+	}
+	let varyMetadata: Record<string, VaryEntry> = {};
 	varyMetadata = await safeJsonParse(
 		varyMetadataResponse?.clone() || null,
-		// deno-lint-ignore no-explicit-any
-		{} as Record<string, any>,
+		{} as Record<string, VaryEntry>,
 		"vary metadata parsing in cache handler",
 	);
-	const vary = varyMetadata[request.url];
-	const cacheKey = await getCacheKey(request, vary);
+	const vary = varyMetadata[request.url] as VaryEntry | undefined;
+	// Only pass vary data if present; defaultGetCacheKey expects CacheVary shape
+	const varyArg = vary
+		? {
+			headers: isStringArray(vary.headers) ? vary.headers : [],
+			cookies: isStringArray(vary.cookies) ? vary.cookies : [],
+			query: isStringArray(vary.query) ? vary.query : [],
+		}
+		: undefined;
+	const cacheKey = await getCacheKey(request, varyArg);
 	const cacheRequest = new Request(cacheKey);
 	let cachedResponse: Response | null = (await cache.match(cacheKey)) ?? null;
 	let needsBackgroundRevalidation = false;

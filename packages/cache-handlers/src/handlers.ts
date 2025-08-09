@@ -1,11 +1,9 @@
 import type {
-	CacheConfig,
 	CacheHandle,
 	CacheHandleOptions,
 	CreateCacheHandlerOptions,
 	HandlerFunction,
 } from "./types.ts";
-import { defaultGetCacheKey } from "./utils.ts";
 import { readFromCache } from "./read.ts";
 import { writeToCache } from "./write.ts";
 
@@ -14,7 +12,6 @@ export function createCacheHandler(
 	options: CreateCacheHandlerOptions = {},
 ): CacheHandle {
 	const baseHandler: HandlerFunction | undefined = options.handler;
-	const getCacheKey = options.getCacheKey || defaultGetCacheKey;
 
 	const handle: CacheHandle = async (
 		request: Request,

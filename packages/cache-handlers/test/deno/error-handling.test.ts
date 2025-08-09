@@ -297,18 +297,15 @@ Deno.test(
 		const cache = await caches.open("test");
 		await cache.put(
 			new Request("https://cache-internal/cache-tag-metadata"),
-			new Response(
-				JSON.stringify({
-					test: [
-						"https://example.com/valid/path", // Valid URL
-						"invalid-malformed-url", // Malformed URL
-						"not://valid/protocol", // Invalid protocol
-					],
-				}),
-				{
-					headers: { "Content-Type": "application/json" },
-				},
-			),
+			Response.json({
+				test: [
+					"https://example.com/valid/path", // Valid URL
+					"invalid-malformed-url", // Malformed URL
+					"not://valid/protocol", // Invalid protocol
+				],
+			}, {
+				headers: { "Content-Type": "application/json" },
+			}),
 		);
 
 		// Should handle malformed keys gracefully and only delete valid ones

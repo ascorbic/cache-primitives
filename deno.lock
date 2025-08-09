@@ -54,10 +54,10 @@
       "packages/cdn-cache-control": {
         "packageJson": {
           "dependencies": [
-            "npm:@arethetypeswrong/core@~0.18.2",
+            "npm:@arethetypeswrong/cli@~0.15.3",
             "npm:@types/node@^20.14.2",
-            "npm:publint@~0.3.12",
-            "npm:tsdown@~0.13.3"
+            "npm:publint@~0.2.8",
+            "npm:tsdown@~0.13.2"
           ]
         }
       }

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
 	compareETags,
 	create304Response,
@@ -162,22 +162,19 @@ describe("Conditional Requests - Workerd Environment", () => {
 					},
 				}),
 			);
-			let invoked = false;
+			const spy = vi.fn(() => new Response("fresh"));
 			const result = await handle(
 				new Request(cacheKey, {
 					headers: {
 						"if-none-match": '"workerd-etag-456"',
 						"cf-ray": "test-conditional-ray",
 					},
-				}) as any,
+				}),
 				{
-					handler: (async () => {
-						invoked = true;
-						return new Response("fresh");
-					}) as any,
+					handler: spy,
 				},
 			);
-			expect(invoked).toBe(false);
+			expect(spy).not.toHaveBeenCalled();
 			expect([200, 304]).toContain(result.status);
 		});
 		test("generates ETag when configured", async () => {
@@ -187,15 +184,15 @@ describe("Conditional Requests - Workerd Environment", () => {
 				features: { conditionalRequests: { etag: "generate" } },
 			});
 			const url = `https://worker.example.com/api/generate-etag-${Date.now()}`;
-			await handle(new Request(url) as any, {
-				handler: (async () =>
+			await handle(new Request(url), {
+				handler: () =>
 					new Response("body", {
 						headers: {
 							"cache-control": "public, max-age=3600",
 							"content-type": "application/json",
 							server: "cloudflare",
 						},
-					})) as any,
+					}),
 			});
 			const cache = await caches.open(cacheName);
 			const cached = await cache.match(url);
@@ -209,32 +206,26 @@ describe("Conditional Requests - Workerd Environment", () => {
 			});
 			const url =
 				`https://worker.example.com/api/middleware-conditional-${Date.now()}`;
-			let count = 0;
-			await handle(new Request(url) as any, {
-				handler: (async () => {
-					count++;
-					return new Response("fresh", {
-						headers: {
-							"cache-control": "public, max-age=3600",
-							"content-type": "application/json",
-						},
-					});
-				}) as any,
-			});
+			const firstHandler = vi.fn(() =>
+				new Response("fresh", {
+					headers: {
+						"cache-control": "public, max-age=3600",
+						"content-type": "application/json",
+					},
+				})
+			);
+			await handle(new Request(url), { handler: firstHandler });
 			const cache = await caches.open(cacheName);
 			const cached = await cache.match(url);
 			const etag = cached?.headers.get("etag");
 			if (etag) {
+				const secondHandler = vi.fn(() => new Response("should not"));
 				const second = await handle(
-					new Request(url, { headers: { "if-none-match": etag } }) as any,
-					{
-						handler: (async () => {
-							count++;
-							return new Response("should not");
-						}) as any,
-					},
+					new Request(url, { headers: { "if-none-match": etag } }),
+					{ handler: secondHandler },
 				);
-				expect(count).toBe(1);
+				expect(firstHandler).toHaveBeenCalledTimes(1);
+				expect(secondHandler).not.toHaveBeenCalled();
 				expect([200, 304]).toContain(second.status);
 			}
 		});
@@ -260,24 +251,21 @@ describe("Conditional Requests - Workerd Environment", () => {
 					},
 				},
 			);
-			const response = await handle(request as any, {
-				handler: (async () =>
-					new Response(
-						JSON.stringify({
-							message: "Hello from Cloudflare Worker",
-							timestamp: Date.now(),
-							country: "US",
-						}),
-						{
-							headers: {
-								"content-type": "application/json",
-								"cache-control": "public, max-age=300",
-								etag: '"cf-generated-etag"',
-								server: "cloudflare",
-								"cf-cache-status": "MISS",
-							},
+			const response = await handle(request, {
+				handler: () =>
+					Response.json({
+						message: "Hello from Cloudflare Worker",
+						timestamp: Date.now(),
+						country: "US",
+					}, {
+						headers: {
+							"content-type": "application/json",
+							"cache-control": "public, max-age=300",
+							etag: '"cf-generated-etag"',
+							server: "cloudflare",
+							"cf-cache-status": "MISS",
 						},
-					)) as any,
+					}),
 			});
 			expect(response.headers.get("etag")).toBe('"cf-generated-etag"');
 			const cache = await caches.open(cacheName);
@@ -332,8 +320,8 @@ describe("Conditional Requests - Workerd Environment", () => {
 						"if-none-match": '"workerd-should-be-ignored"',
 						"cf-ray": "disabled-test-ray",
 					},
-				}) as any,
-				{ handler: (async () => new Response("fresh")) as any },
+				}),
+				{ handler: () => new Response("fresh") },
 			);
 			expect(result.status).toBe(200);
 			expect(await result.text()).toBe("cached worker data");

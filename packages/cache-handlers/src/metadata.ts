@@ -3,6 +3,15 @@
  */
 
 import { getErrorHandler, safeJsonParse } from "./errors.ts";
+import type { CacheVary } from "./types.ts";
+
+// Strongly typed metadata entry for Vary data (LRU tracking via timestamp)
+interface VaryEntry {
+	// Arbitrary vary data structure (headers/cookies/query lists etc.)
+	// Use unknown to avoid any; callers narrow as needed
+	[key: string]: unknown;
+	timestamp: number; // LRU timestamp (ms)
+}
 
 const METADATA_LOCK_PREFIX = "https://cache-internal/lock-";
 const METADATA_LOCK_TIMEOUT = 5000; // 5 seconds
@@ -46,12 +55,7 @@ export async function atomicMetadataUpdate<T>(
 				const updatedData = updateFn(currentData);
 
 				// Write back updated metadata
-				await cache.put(
-					metadataKey,
-					new Response(JSON.stringify(updatedData), {
-						headers: { "Content-Type": "application/json" },
-					}),
-				);
+				await cache.put(metadataKey, Response.json(updatedData));
 
 				return; // Success
 			} finally {
@@ -106,12 +110,7 @@ async function tryAcquireLock(cache: Cache, lockKey: string): Promise<boolean> {
 			pid: Math.random().toString(36).substring(2), // Simple process identifier
 		};
 
-		await cache.put(
-			lockKey,
-			new Response(JSON.stringify(lockData), {
-				headers: { "Content-Type": "application/json" },
-			}),
-		);
+		await cache.put(lockKey, Response.json(lockData));
 
 		return true;
 	} catch (error) {
@@ -180,37 +179,37 @@ export async function updateVaryMetadata(
 	cache: Cache,
 	metadataKey: string,
 	requestUrl: string,
-	varyData: any,
+	varyData: CacheVary,
 	maxEntries = 1000,
 ): Promise<void> {
 	await atomicMetadataUpdate(
 		cache,
 		metadataKey,
-		(metadata: Record<string, any>) => {
+		(metadata: Record<string, VaryEntry>) => {
 			// Add timestamp for LRU cleanup
-			metadata[requestUrl] = {
+			const entry: VaryEntry = {
 				...varyData,
 				timestamp: Date.now(),
 			};
+			metadata[requestUrl] = entry;
 
 			// Implement LRU cleanup if we exceed maxEntries
-			const entries = Object.entries(metadata);
+			const entries: Array<[string, VaryEntry]> = Object.entries(
+				metadata,
+			) as Array<[string, VaryEntry]>;
 			if (entries.length > maxEntries) {
-				// Sort by timestamp (oldest first) and remove oldest entries
-				entries.sort(([, a], [, b]) => (a.timestamp || 0) - (b.timestamp || 0));
+				// Sort by timestamp (oldest first) and keep newest maxEntries
+				entries.sort(([, a], [, b]) => a.timestamp - b.timestamp);
 				const toKeep = entries.slice(-maxEntries);
-
-				// Rebuild metadata with only the entries to keep
-				const cleanedMetadata: Record<string, any> = {};
-				for (const [key, value] of toKeep) {
-					cleanedMetadata[key] = value;
+				const cleanedMetadata: Record<string, VaryEntry> = {};
+				for (const [k, v] of toKeep) {
+					cleanedMetadata[k] = v;
 				}
 				return cleanedMetadata;
 			}
-
 			return metadata;
 		},
-		{} as Record<string, any>,
+		{} as Record<string, VaryEntry>,
 	);
 }
 
@@ -225,19 +224,18 @@ export async function cleanupVaryMetadata(
 	await atomicMetadataUpdate(
 		cache,
 		metadataKey,
-		(metadata: Record<string, any>) => {
+		(metadata: Record<string, VaryEntry>) => {
 			const now = Date.now();
-			const cleanedMetadata: Record<string, any> = {};
-
-			for (const [key, value] of Object.entries(metadata)) {
-				const timestamp = value.timestamp || 0;
-				if (now - timestamp < maxAge) {
-					cleanedMetadata[key] = value;
+			const cleanedMetadata: Record<string, VaryEntry> = {};
+			for (
+				const [k, v] of Object.entries(metadata) as Array<[string, VaryEntry]>
+			) {
+				if (now - v.timestamp < maxAge) {
+					cleanedMetadata[k] = v;
 				}
 			}
-
 			return cleanedMetadata;
 		},
-		{} as const,
+		{} as Record<string, VaryEntry>,
 	);
 }

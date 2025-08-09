@@ -29,6 +29,5 @@ export type {
 	HandlerInfo,
 	HandlerMode,
 	InvalidationOptions,
-	RevalidationHandler,
 	SWRPolicy,
 } from "./types.ts";
