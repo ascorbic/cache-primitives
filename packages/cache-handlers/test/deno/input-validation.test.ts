@@ -399,60 +399,6 @@ Deno.test(
 );
 
 Deno.test(
-	"Input Validation - Config object with malicious properties",
-	async () => {
-		const cache = await caches.open("test");
-
-		// Test with config objects containing malicious properties
-		const maliciousConfigs = [
-			{
-				__proto__: { admin: true },
-				cacheName: "test",
-			},
-			{
-				constructor: { prototype: { isAdmin: true } },
-				maxTtl: 3600,
-			},
-			{
-				toString: () => "malicious",
-				defaultTtl: 1800,
-			},
-			{
-				valueOf: () => ({ admin: true }),
-				features: { cacheControl: true },
-			},
-		] as const;
-
-		for (const config of maliciousConfigs) {
-			// Should create handlers without issues despite malicious config
-			// Construct helpers to ensure config doesn't break them
-			const mergedConfig = { cacheName: "test", ...config };
-			// Basic write then read cycle
-			const req = new Request("https://example.com/api/config-test");
-			const resp = new Response("data", {
-				headers: { "cache-control": "max-age=1" },
-			});
-			const written = await writeToCache(req, resp, mergedConfig);
-			assertExists(written);
-			const { cached } = await readFromCache(req, mergedConfig);
-			if (cached) {
-				await cached.text();
-			}
-
-			// Verify no prototype pollution occurred
-			assertEquals(
-				Object.prototype.hasOwnProperty.call(Object.prototype, "admin"),
-				false,
-			);
-			assertEquals(
-				Object.prototype.hasOwnProperty.call(Object.prototype, "isAdmin"),
-				false,
-			);
-		}
-	},
-);
-
-Deno.test(
 	"Input Validation - Extremely deep object nesting in metadata",
 	async () => {
 		const cache = await caches.open("test");

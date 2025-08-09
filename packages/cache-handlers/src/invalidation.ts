@@ -1,6 +1,6 @@
 import type { InvalidationOptions } from "./types.ts";
 import { getCache, parseCacheTags, validateCacheTag } from "./utils.ts";
-import { getErrorHandler, safeJsonParse } from "./errors.ts";
+import { safeJsonParse } from "./errors.ts";
 
 const METADATA_KEY = "https://cache-internal/cache-primitives-metadata";
 

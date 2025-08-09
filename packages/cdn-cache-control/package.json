@@ -5,7 +5,7 @@
 	"homepage": "https://github.com/ascorbic/cache-primitives",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/ascorbic/cache-primitives.git",
+		"url": "git+https://github.com/ascorbic/cache-primitives.git",
 		"directory": "packages/cdn-cache-control"
 	},
 	"main": "dist/index.js",
