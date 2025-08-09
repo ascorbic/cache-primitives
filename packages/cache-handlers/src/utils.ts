@@ -1,9 +1,9 @@
 import type {
 	CacheConfig,
 	CacheVary,
+	ConditionalRequestConfig,
 	InvalidationOptions,
 	ParsedCacheHeaders,
-	ConditionalRequestConfig,
 } from "./types.ts";
 
 const DEFAULT_CACHE_NAME = "cache-primitives-default";
@@ -32,7 +32,7 @@ export async function getCache(
 ): Promise<Cache> {
 	return (
 		options.cache ??
-		(await caches.open(options.cacheName ?? DEFAULT_CACHE_NAME))
+			(await caches.open(options.cacheName ?? DEFAULT_CACHE_NAME))
 	);
 }
 
@@ -63,7 +63,9 @@ export function parseCacheControl(
 
 	for (const part of parts) {
 		const [key, value] = part.split("=", 2);
-		if (!key) continue;
+		if (!key) {
+			continue;
+		}
 		const cleanKey = key.trim().toLowerCase();
 
 		if (value !== undefined) {
@@ -150,7 +152,9 @@ export function parseCacheVaryHeader(headerValue: string): CacheVary {
 
 	for (const directive of directives) {
 		const equalIndex = directive.indexOf("=");
-		if (equalIndex === -1) continue;
+		if (equalIndex === -1) {
+			continue;
+		}
 
 		const type = directive.substring(0, equalIndex).trim();
 		const value = directive.substring(equalIndex + 1).trim();
@@ -216,12 +220,12 @@ export function parseResponseHeaders(
 	const { headers } = response;
 	const features = config.features ?? {};
 
-	const cacheControlHeader =
-		features.cacheControl !== false ? headers.get("cache-control") : null;
-	const cdnCacheControlHeader =
-		features.cdnCacheControl !== false
-			? headers.get("cdn-cache-control")
-			: null;
+	const cacheControlHeader = features.cacheControl !== false
+		? headers.get("cache-control")
+		: null;
+	const cdnCacheControlHeader = features.cdnCacheControl !== false
+		? headers.get("cdn-cache-control")
+		: null;
 
 	const finalCacheControl = cdnCacheControlHeader || cacheControlHeader;
 
@@ -276,10 +280,9 @@ export function parseResponseHeaders(
 		}
 
 		// Determine if we should generate ETag if missing
-		const conditionalConfig =
-			typeof features.conditionalRequests === "object"
-				? features.conditionalRequests
-				: {};
+		const conditionalConfig = typeof features.conditionalRequests === "object"
+			? features.conditionalRequests
+			: {};
 
 		if (!etag && conditionalConfig.etag === "generate") {
 			result.shouldGenerateETag = true;
@@ -287,12 +290,10 @@ export function parseResponseHeaders(
 	}
 
 	// Cache only when explicitly allowed by headers (no implicit caching)
-	const hasExplicitCacheHeaders =
-		!!finalCacheControl ||
+	const hasExplicitCacheHeaders = !!finalCacheControl ||
 		!!headers.get("cache-tag") ||
 		!!headers.get("expires");
-	result.shouldCache =
-		hasExplicitCacheHeaders &&
+	result.shouldCache = hasExplicitCacheHeaders &&
 		!result.isPrivate &&
 		!result.noCache &&
 		!result.noStore;
@@ -394,7 +395,7 @@ export function defaultGetCacheKey(request: Request, vary?: CacheVary): string {
 		// Normalize query parameters even without vary to ensure consistency
 		const sortedSearchParams = new URLSearchParams();
 		const entries = Array.from(url.searchParams.entries()).sort(([a], [b]) =>
-			a.localeCompare(b),
+			a.localeCompare(b)
 		);
 		for (const [name, value] of entries) {
 			sortedSearchParams.append(name, value);
@@ -519,10 +520,14 @@ export function removeHeaders(
  * ```
  */
 export function isCacheValid(expiresHeader: string | null): boolean {
-	if (!expiresHeader) return true;
+	if (!expiresHeader) {
+		return true;
+	}
 	const expiresAt = new Date(expiresHeader);
 	// Invalid dates are treated as never expiring for safety
-	if (isNaN(expiresAt.getTime())) return true;
+	if (isNaN(expiresAt.getTime())) {
+		return true;
+	}
 	return Date.now() < expiresAt.getTime();
 }
 

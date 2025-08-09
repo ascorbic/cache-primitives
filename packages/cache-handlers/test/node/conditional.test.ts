@@ -189,7 +189,8 @@ describe("Conditional Requests - Node.js with undici", () => {
 				cacheName,
 				features: { conditionalRequests: { etag: "generate" } },
 			});
-			const url = `https://example.com/api/middleware-conditional-${Date.now()}`;
+			const url =
+				`https://example.com/api/middleware-conditional-${Date.now()}`;
 			let count = 0;
 			const first = await handle(new Request(url) as any, {
 				handler: (async () => {

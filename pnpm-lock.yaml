@@ -11,15 +11,12 @@ importers:
       '@changesets/cli':
         specifier: ^2.27.7
         version: 2.27.7
-      prettier:
-        specifier: ^3.3.1
-        version: 3.3.1
       tsdoc-markdown:
         specifier: ^0.6.0
         version: 0.6.0(typescript@5.9.2)
       tsdown:
         specifier: ^0.13.3
-        version: 0.13.3(@arethetypeswrong/core@0.18.2)(publint@0.3.12)(typescript@5.9.2)
+        version: 0.13.3(typescript@5.9.2)
       typescript:
         specifier: ^5.9.2
         version: 5.9.2
@@ -2429,12 +2426,6 @@ packages:
     hasBin: true
     dev: true
 
-  /prettier@3.3.1:
-    resolution: {integrity: sha512-7CAwy5dRsxs8PHXT3twixW9/OEll8MLE0VRPCJyl7CkS6VHGPSlsVaWTiASPTyGyYRyApxlaWTzwUxVNrhcwDg==}
-    engines: {node: '>=14'}
-    hasBin: true
-    dev: true
-
   /pseudomap@1.0.2:
     resolution: {integrity: sha512-b/YwNhb8lk1Zz2+bXXpS/LK9OisiZZ1SNsSLxN1x2OXVEhW2Ckr/7mWE5vrC1ZTiJlD9g19jWszTmJsB+oEpFQ==}
     dev: true
@@ -2827,6 +2818,50 @@ packages:
       empathic: 2.0.0
       hookable: 5.5.3
       publint: 0.3.12
+      rolldown: 1.0.0-beta.31
+      rolldown-plugin-dts: 0.15.4(rolldown@1.0.0-beta.31)(typescript@5.9.2)
+      semver: 7.7.2
+      tinyexec: 1.0.1
+      tinyglobby: 0.2.14
+      tree-kill: 1.2.2
+      typescript: 5.9.2
+      unconfig: 7.3.2
+    transitivePeerDependencies:
+      - '@typescript/native-preview'
+      - oxc-resolver
+      - supports-color
+      - vue-tsc
+    dev: true
+
+  /tsdown@0.13.3(typescript@5.9.2):
+    resolution: {integrity: sha512-3ujweLJB70DdWXX3v7xnzrFhzW1F/6/99XhGeKzh1UCmZ+ttFmF7Czha7VaunA5Dq/u+z4aNz3n4GH748uivYg==}
+    engines: {node: '>=20.19.0'}
+    hasBin: true
+    peerDependencies:
+      '@arethetypeswrong/core': ^0.18.1
+      publint: ^0.3.0
+      typescript: ^5.0.0
+      unplugin-lightningcss: ^0.4.0
+      unplugin-unused: ^0.5.0
+    peerDependenciesMeta:
+      '@arethetypeswrong/core':
+        optional: true
+      publint:
+        optional: true
+      typescript:
+        optional: true
+      unplugin-lightningcss:
+        optional: true
+      unplugin-unused:
+        optional: true
+    dependencies:
+      ansis: 4.1.0
+      cac: 6.7.14
+      chokidar: 4.0.3
+      debug: 4.4.1
+      diff: 8.0.2
+      empathic: 2.0.0
+      hookable: 5.5.3
       rolldown: 1.0.0-beta.31
       rolldown-plugin-dts: 0.15.4(rolldown@1.0.0-beta.31)(typescript@5.9.2)
       semver: 7.7.2

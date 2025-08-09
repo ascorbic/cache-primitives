@@ -57,10 +57,9 @@ export async function readFromCache(
 	if (cachedResponse) {
 		const features = config.features ?? {};
 		if (features.conditionalRequests !== false) {
-			const conditionalConfig =
-				typeof features.conditionalRequests === "object"
-					? features.conditionalRequests
-					: getDefaultConditionalConfig();
+			const conditionalConfig = typeof features.conditionalRequests === "object"
+				? features.conditionalRequests
+				: getDefaultConditionalConfig();
 			const validation = validateConditionalRequest(
 				request,
 				cachedResponse,

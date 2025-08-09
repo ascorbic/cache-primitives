@@ -28,7 +28,9 @@ class DefaultErrorHandler implements ErrorHandler {
 	constructor(private silent = false) {}
 
 	log(level: LogLevel, message: string, error?: Error): void {
-		if (this.silent) return;
+		if (this.silent) {
+			return;
+		}
 
 		const fullMessage = error ? `${message}: ${error.message}` : message;
 

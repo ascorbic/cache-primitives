@@ -92,8 +92,7 @@ export class CacheHeaders extends Headers {
 		);
 		const directives = parseCacheControlHeader(this.get("Cache-Control"));
 
-		const sMaxAge =
-			cdnDirectives["s-maxage"] ??
+		const sMaxAge = cdnDirectives["s-maxage"] ??
 			cdnDirectives["max-age"] ??
 			directives["s-maxage"] ??
 			ONE_YEAR.toString();

@@ -9,15 +9,18 @@ This is a monorepo for CDN cache control libraries using pnpm workspaces:
 
 - **Root**: Workspace configuration and shared tooling
 - **packages/**: Individual library packages
-  - `cdn-cache-control`: Easy, opinionated CDN cache header handling (TypeScript class-based API)
-  - `cache-handlers`: Modern CDN cache primitives using web-standard middleware (functional API)
+  - `cdn-cache-control`: Easy, opinionated CDN cache header handling (TypeScript
+    class-based API)
+  - `cache-handlers`: Modern CDN cache primitives using web-standard middleware
+    (functional API)
 
 ## Commands
 
 ### Root-level commands (run from repository root):
 
 - `pnpm build` - Build all packages
-- `pnpm test` - Run tests for all packages (includes Deno, Node.js, and Workerd tests)
+- `pnpm test` - Run tests for all packages (includes Deno, Node.js, and Workerd
+  tests)
 - `pnpm check` - Run type checking and linting for all packages
 - `pnpm lint` - Run linting for all packages
 - `pnpm format` - Format code using Prettier
@@ -62,7 +65,8 @@ This is a monorepo for CDN cache control libraries using pnpm workspaces:
   - HTTP conditional requests (ETag, Last-Modified, 304 responses)
   - Cache invalidation by tags and paths
   - Multi-runtime support (Deno, Node.js, Cloudflare Workers)
-- **Testing**: Multi-runtime (Deno tests, Node.js via Vitest, Workerd via Vitest)
+- **Testing**: Multi-runtime (Deno tests, Node.js via Vitest, Workerd via
+  Vitest)
 - **Build**: ESM-only output
 
 Each package follows this structure:
@@ -78,7 +82,8 @@ Uses strict TypeScript configuration with:
 
 - Target: ES2022
 - Module: preserve (for bundler compatibility)
-- Strict mode with additional safety checks (`noUncheckedIndexedAccess`, `noImplicitOverride`)
+- Strict mode with additional safety checks (`noUncheckedIndexedAccess`,
+  `noImplicitOverride`)
 - Library-focused settings (declaration files, declaration maps)
 
 ## Use Specialized Agents for Complex Tasks
@@ -89,7 +94,9 @@ ALWAYS use the appropriate specialized agents for complex work:
   technical approaches, planning major features
 - **code-reviewer**: For comprehensive code review after implementing
   significant code changes
-- **test-engineer**: For analyzing test failures, creating new tests, and enhancing test coverage. Should NOT fix application code - only creates/updates test files
+- **test-engineer**: For analyzing test failures, creating new tests, and
+  enhancing test coverage. Should NOT fix application code - only
+  creates/updates test files
 - **docs-author**: For creating or updating documentation, READMEs, changesets,
   or PR descriptions
 - **package-installer**: For installing npm packages with proper dependency

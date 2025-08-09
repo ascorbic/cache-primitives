@@ -1,9 +1,9 @@
-import { describe, test, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 import {
-	invalidateByTag,
-	invalidateByPath,
-	invalidateAll,
 	getCacheStats,
+	invalidateAll,
+	invalidateByPath,
+	invalidateByTag,
 } from "../../src/invalidation.js";
 
 describe("Cache Invalidation - Workerd Environment", () => {

@@ -17,7 +17,9 @@ export async function writeToCache(
 	response: Response,
 	config: CacheConfig = {},
 ): Promise<Response> {
-	if (request.method !== "GET") return response;
+	if (request.method !== "GET") {
+		return response;
+	}
 	const getCacheKey = config.getCacheKey || defaultGetCacheKey;
 	const cache = await getCache(config);
 	const cacheInfo = parseResponseHeaders(response, config);
@@ -29,10 +31,9 @@ export async function writeToCache(
 	const headers = new Headers(responseToCache.headers);
 	if (cacheInfo.shouldGenerateETag) {
 		const features = config.features ?? {};
-		const conditionalConfig =
-			typeof features.conditionalRequests === "object"
-				? features.conditionalRequests
-				: {};
+		const conditionalConfig = typeof features.conditionalRequests === "object"
+			? features.conditionalRequests
+			: {};
 		if (conditionalConfig.etagGenerator) {
 			const etag = await conditionalConfig.etagGenerator(responseToCache);
 			headers.set("etag", etag);

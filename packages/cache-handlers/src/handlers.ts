@@ -23,7 +23,9 @@ export function createCacheHandler(
 		// Only cache GET
 		if (request.method !== "GET") {
 			const handler = callOpts.handler || baseHandler;
-			if (!handler) return new Response("No handler provided", { status: 500 });
+			if (!handler) {
+				return new Response("No handler provided", { status: 500 });
+			}
 			return handler(request, { mode: "miss", background: false });
 		}
 
@@ -47,8 +49,11 @@ export function createCacheHandler(
 							console.warn("SWR background revalidation failed", err);
 						}
 					})();
-					if (scheduler) scheduler(revalidatePromise);
-					else queueMicrotask(() => void revalidatePromise);
+					if (scheduler) {
+						scheduler(revalidatePromise);
+					} else {
+						queueMicrotask(() => void revalidatePromise);
+					}
 				}
 			}
 			return cached;

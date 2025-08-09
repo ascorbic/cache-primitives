@@ -149,7 +149,8 @@ describe("Conditional Requests - Workerd Environment", () => {
 				cacheName,
 				features: { conditionalRequests: true },
 			});
-			const cacheKey = `https://worker.example.com/api/conditional-${Date.now()}`;
+			const cacheKey =
+				`https://worker.example.com/api/conditional-${Date.now()}`;
 			await cache.put(
 				new URL(cacheKey),
 				new Response("cached worker data", {
@@ -206,7 +207,8 @@ describe("Conditional Requests - Workerd Environment", () => {
 				cacheName,
 				features: { conditionalRequests: { etag: "generate" } },
 			});
-			const url = `https://worker.example.com/api/middleware-conditional-${Date.now()}`;
+			const url =
+				`https://worker.example.com/api/middleware-conditional-${Date.now()}`;
 			let count = 0;
 			await handle(new Request(url) as any, {
 				handler: (async () => {

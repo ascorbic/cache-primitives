@@ -173,7 +173,7 @@ export function validateConditionalRequest(
 			} else if (Array.isArray(requestETags)) {
 				const useWeakComparison = config.weakValidation !== false;
 				etagMatches = requestETags.some((requestETag) =>
-					compareETags(cachedETag, requestETag, useWeakComparison),
+					compareETags(cachedETag, requestETag, useWeakComparison)
 				);
 				if (etagMatches) {
 					matchedValidator = "etag";

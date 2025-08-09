@@ -1,14 +1,23 @@
 # cache-handlers
 
-Unified, modern HTTP caching + invalidation + conditional requests built directly on standard Web APIs (`Request`, `Response`, `CacheStorage`). One small API: `createCacheHandler` – works on Cloudflare Workers, Netlify Edge, Deno, workerd, and Node 20+ (with Undici polyfills).
+Unified, modern HTTP caching + invalidation + conditional requests built
+directly on standard Web APIs (`Request`, `Response`, `CacheStorage`). One small
+API: `createCacheHandler` – works on Cloudflare Workers, Netlify Edge, Deno,
+workerd, and Node 20+ (with Undici polyfills).
 
 ## Highlights
 
-- Single handler: read -> serve (fresh/stale) -> optional background revalidate (SWR) -> write
-- Uses only standard headers for core caching logic: `Cache-Control` (+ `stale-while-revalidate`), `CDN-Cache-Control`, `Cache-Tag`, `Vary`, `ETag`, `Last-Modified`
-- Optional custom extension header: `Cache-Vary` (library-defined – lets your backend declare specific header/cookie/query components for key derivation without bloating the standard `Vary` header)
+- Single handler: read -> serve (fresh/stale) -> optional background revalidate
+  (SWR) -> write
+- Uses only standard headers for core caching logic: `Cache-Control` (+
+  `stale-while-revalidate`), `CDN-Cache-Control`, `Cache-Tag`, `Vary`, `ETag`,
+  `Last-Modified`
+- Optional custom extension header: `Cache-Vary` (library-defined – lets your
+  backend declare specific header/cookie/query components for key derivation
+  without bloating the standard `Vary` header)
 - Stale-While-Revalidate implemented purely via directives (no custom headers)
-- Tag & path invalidation helpers (`invalidateByTag`, `invalidateByPath`, `invalidateAll` + stats)
+- Tag & path invalidation helpers (`invalidateByTag`, `invalidateByPath`,
+  `invalidateAll` + stats)
 - Optional automatic ETag generation & conditional 304 responses
 - Backend-driven Vary via custom `Cache-Vary` (header= / cookie= / query=)
 - Zero runtime dependencies, ESM only, fully typed
@@ -54,12 +63,15 @@ addEventListener("fetch", (event: FetchEvent) => {
 1. Request arrives; cache checked (GET only is cached)
 2. Miss -> `handler` runs, response cached
 3. Hit & still fresh -> served instantly
-4. Expired but inside `stale-while-revalidate` window -> stale response served, background revalidation queued
-5. Conditional client request (If-None-Match / If-Modified-Since) may yield a 304
+4. Expired but inside `stale-while-revalidate` window -> stale response served,
+   background revalidation queued
+5. Conditional client request (If-None-Match / If-Modified-Since) may yield a
+   304
 
 ## Node 20+ Usage (Undici Polyfill)
 
-Node 20 ships `fetch` et al, but _not_ `caches` yet. Use `undici` to polyfill CacheStorage.
+Node 20 ships `fetch` et al, but _not_ `caches` yet. Use `undici` to polyfill
+CacheStorage.
 
 ```ts
 import { createServer } from "node:http";
@@ -90,7 +102,9 @@ createServer(async (req, res) => {
 	if (response.body) {
 		const buf = Buffer.from(await response.arrayBuffer());
 		res.end(buf);
-	} else res.end();
+	} else {
+		res.end();
+	}
 }).listen(3000, () => console.log("Listening on :3000"));
 ```
 
@@ -132,7 +146,9 @@ Just send the directive in your upstream response:
 Cache-Control: public, max-age=30, stale-while-revalidate=300
 ```
 
-No custom headers are added. While inside the SWR window the _stale_ cached response is returned immediately and a background revalidation run is triggered (if a `handler` was supplied).
+No custom headers are added. While inside the SWR window the _stale_ cached
+response is returned immediately and a background revalidation run is triggered
+(if a `handler` was supplied).
 
 To use a runtime scheduler (eg Workers' `event.waitUntil`):
 
@@ -152,10 +168,10 @@ Tag and path invalidation helpers work against the same underlying cache.
 
 ```ts
 import {
-	invalidateByTag,
-	invalidateByPath,
-	invalidateAll,
 	getCacheStats,
+	invalidateAll,
+	invalidateByPath,
+	invalidateByTag,
 } from "cache-handlers";
 
 await invalidateByTag("home");
@@ -206,12 +222,12 @@ Exported for advanced/manual workflows:
 
 ```ts
 import {
-	generateETag,
-	parseETag,
 	compareETags,
-	validateConditionalRequest,
 	create304Response,
+	generateETag,
 	getDefaultConditionalConfig,
+	parseETag,
+	validateConditionalRequest,
 } from "cache-handlers";
 ```
 
@@ -222,12 +238,18 @@ const cached = new Response("data", {
 	headers: { etag: await generateETag(new Response("data")) },
 });
 const validation = validateConditionalRequest(request, cached);
-if (validation.shouldReturn304) return create304Response(cached);
+if (validation.shouldReturn304) {
+	return create304Response(cached);
+}
 ```
 
 ## Backend-Driven Variations (`Cache-Vary` – custom header)
 
-`Cache-Vary` is a _non-standard_, library-specific response header. It augments the standard `Vary` mechanism by letting you list only the precise components you want included in the cache key (headers, cookies, query params) without emitting a large `Vary` header externally. The library consumes & strips it when constructing the internal key.
+`Cache-Vary` is a _non-standard_, library-specific response header. It augments
+the standard `Vary` mechanism by letting you list only the precise components
+you want included in the cache key (headers, cookies, query params) without
+emitting a large `Vary` header externally. The library consumes & strips it when
+constructing the internal key.
 
 Add selective vary dimensions without inflating the standard `Vary` header:
 
@@ -235,21 +257,23 @@ Add selective vary dimensions without inflating the standard `Vary` header:
 Cache-Vary: header=Accept-Language, cookie=session_id, query=version
 ```
 
-Each listed dimension becomes part of the derived cache key. Standard `Vary` remains fully respected; `Cache-Vary` is additive and internal – safe to use even if unknown to intermediaries.
+Each listed dimension becomes part of the derived cache key. Standard `Vary`
+remains fully respected; `Cache-Vary` is additive and internal – safe to use
+even if unknown to intermediaries.
 
 ## Types
 
 ```ts
 import type {
 	CacheConfig,
-	CreateCacheHandlerOptions,
 	CacheHandle,
 	CacheHandleOptions,
-	InvalidationOptions,
 	ConditionalRequestConfig,
+	CreateCacheHandlerOptions,
 	HandlerFunction,
 	HandlerInfo,
 	HandlerMode,
+	InvalidationOptions,
 } from "cache-handlers";
 ```
 
