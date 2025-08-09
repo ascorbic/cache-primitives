@@ -1,7 +1,7 @@
 {
   "name": "cache-handlers",
   "version": "0.0.0",
-  "description": "Modern CDN cache primitives using web-standard middleware",
+  "description": "Modern CDN cache primitives",
   "type": "module",
   "main": "dist/index.js",
   "files": [
@@ -15,7 +15,7 @@
     "dev": "tsdown --watch",
     "prepublishOnly": "node --run build",
     "test": "pnpm run '/^test:.*/'",
-    "test:deno": "cd ../.. && deno test packages/cache-handlers/test/deno/",
+    "test:deno": "deno test test/deno",
     "test:node": "vitest run",
     "test:workerd": "vitest run --config vitest.workerd.config.ts"
   },

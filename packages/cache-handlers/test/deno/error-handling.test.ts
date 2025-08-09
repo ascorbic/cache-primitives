@@ -4,7 +4,7 @@ import {
 	assertExists,
 	assertRejects,
 	assertThrows,
-} from "@std/assert";
+} from "jsr:@std/assert";
 import { readFromCache } from "../../src/read.ts";
 import { writeToCache } from "../../src/write.ts";
 import { defaultGetCacheKey, isCacheValid } from "../../src/utils.ts";

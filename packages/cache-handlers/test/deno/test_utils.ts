@@ -1,5 +1,3 @@
-// packages/cache-handlers/test/test_utils.ts
-
 export class FailingCache implements Cache {
 	constructor(private errorOnMethod: string) {}
 

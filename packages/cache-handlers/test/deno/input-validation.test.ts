@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertExists } from "@std/assert";
+import { assert, assertEquals, assertExists } from "jsr:@std/assert";
 import { writeToCache } from "../../src/write.ts";
 import { readFromCache } from "../../src/read.ts";
 import {

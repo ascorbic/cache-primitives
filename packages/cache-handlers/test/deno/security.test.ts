@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "jsr:@std/assert";
 import { writeToCache } from "../../src/write.ts";
 import {
 	defaultGetCacheKey,

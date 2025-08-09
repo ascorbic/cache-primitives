@@ -1,8 +1,5 @@
 {
 	"workspace": ["packages/cdn-cache-control", "packages/cache-handlers"],
-	"imports": {
-		"@std/assert": "jsr:@std/assert@^1.0.13"
-	},
 	"fmt": {
 		"useTabs": true,
 		"useBraces": "always",

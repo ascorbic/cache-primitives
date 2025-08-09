@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertExists } from "@std/assert";
+import { assert, assertEquals, assertExists } from "jsr:@std/assert";
 // Use internal test-only helpers (not exported from package entrypoint)
 import { readFromCache } from "../../src/read.ts";
 import { writeToCache } from "../../src/write.ts";
