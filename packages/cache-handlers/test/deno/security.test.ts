@@ -45,9 +45,10 @@ Deno.test("Security - Extremely long cache keys", () => {
 
 	// Should not throw and should handle gracefully
 	const cacheKey = defaultGetCacheKey(request);
+	const parsedUrl = new URL(cacheKey);
 	assert(
-		cacheKey.startsWith("https://example.com"),
-		"Cache key should start with origin",
+		parsedUrl.host === "example.com",
+		"Cache key should have host 'example.com'",
 	);
 	assert(cacheKey.length > 100000, "Cache key should be long");
 });
@@ -75,9 +76,10 @@ Deno.test("Security - Vary header bomb attack", () => {
 
 	// Should complete in reasonable time (less than 100ms)
 	assert(duration < 100, `Cache key generation took too long: ${duration}ms`);
+	const parsedUrl = new URL(cacheKey);
 	assert(
-		cacheKey.startsWith("https://example.com"),
-		"Cache key should start with origin",
+		parsedUrl.host === "example.com",
+		"Cache key should have host 'example.com'",
 	);
 });
 
