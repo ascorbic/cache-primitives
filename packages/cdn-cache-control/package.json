@@ -36,7 +36,7 @@
 		"check:jsr": "deno publish --dry-run --allow-dirty",
 		"lint:types": "attw --pack .",
 		"lint:package": "publint",
-		"lint:prettier": "prettier --check src",
+		"lint:deno": "deno lint",
 		"lint": "pnpm run '/^lint:.*/'",
 		"test": "pnpm run test:node",
 		"test:node": "pnpm build && node --test test/*.js",

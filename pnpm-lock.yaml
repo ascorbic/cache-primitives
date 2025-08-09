@@ -11,9 +11,6 @@ importers:
       '@changesets/cli':
         specifier: ^2.27.7
         version: 2.27.7
-      prettier:
-        specifier: ^3.3.1
-        version: 3.3.1
       tsdoc-markdown:
         specifier: ^0.6.0
         version: 0.6.0(typescript@5.9.2)
@@ -1319,12 +1316,6 @@ packages:
   /prettier@2.8.8:
     resolution: {integrity: sha512-tdN8qQGvNjw4CHbY+XXk0JgCXn9QiF21a55rBe5LJAU+kDyC4WQn4+awm2Xfk2lQMk5fKup9XgzTZtGkjBdP9Q==}
     engines: {node: '>=10.13.0'}
-    hasBin: true
-    dev: true
-
-  /prettier@3.3.1:
-    resolution: {integrity: sha512-7CAwy5dRsxs8PHXT3twixW9/OEll8MLE0VRPCJyl7CkS6VHGPSlsVaWTiASPTyGyYRyApxlaWTzwUxVNrhcwDg==}
-    engines: {node: '>=14'}
     hasBin: true
     dev: true
 
