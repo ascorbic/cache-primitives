@@ -20,7 +20,11 @@
 		"module": "preserve",
 		"noEmit": true,
 		/* Allow .ts imports and DOM types: */
-		"lib": ["es2022", "DOM", "DOM.Iterable", "deno.ns"],
+		"lib": [
+			"es2022",
+			"DOM",
+			"DOM.Iterable",
+		],
 		"allowImportingTsExtensions": true
 	}
 }

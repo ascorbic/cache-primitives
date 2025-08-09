@@ -1,6 +1,6 @@
 import type { InvalidationOptions } from "./types.ts";
 import { getCache, parseCacheTags, validateCacheTag } from "./utils.ts";
-import { safeJsonParse, getErrorHandler } from "./errors.ts";
+import { getErrorHandler, safeJsonParse } from "./errors.ts";
 
 const METADATA_KEY = "https://cache-internal/cache-primitives-metadata";
 
@@ -30,46 +30,46 @@ const METADATA_KEY = "https://cache-internal/cache-primitives-metadata";
  * ```
  */
 export async function invalidateByTag(
-	tag: string,
-	options: InvalidationOptions = {},
+  tag: string,
+  options: InvalidationOptions = {},
 ): Promise<number> {
-	const validatedTag = validateCacheTag(tag);
-	const cache = await getCache(options);
-	const metadataResponse = await cache.match(METADATA_KEY);
+  const validatedTag = validateCacheTag(tag);
+  const cache = await getCache(options);
+  const metadataResponse = await cache.match(METADATA_KEY);
 
-	let metadata: Record<string, string[]> = {};
-	let keysToDelete: string[] = [];
+  let metadata: Record<string, string[]> = {};
+  let keysToDelete: string[] = [];
 
-	metadata = await safeJsonParse(
-		metadataResponse || null,
-		{} as Record<string, string[]>,
-		`invalidation metadata for tag: ${validatedTag}`,
-	);
-	keysToDelete = metadata[validatedTag] || [];
+  metadata = await safeJsonParse(
+    metadataResponse || null,
+    {} as Record<string, string[]>,
+    `invalidation metadata for tag: ${validatedTag}`,
+  );
+  keysToDelete = metadata[validatedTag] || [];
 
-	// Note: Fallback to full cache scan is not available in Deno Cache API
-	// This function relies on metadata for efficient invalidation
+  // Note: Fallback to full cache scan is not available in Deno Cache API
+  // This function relies on metadata for efficient invalidation
 
-	let deletedCount = 0;
-	for (const key of keysToDelete) {
-		const deleted = await cache.delete(key);
-		if (deleted) {
-			deletedCount++;
-		}
-	}
+  let deletedCount = 0;
+  for (const key of keysToDelete) {
+    const deleted = await cache.delete(key);
+    if (deleted) {
+      deletedCount++;
+    }
+  }
 
-	// Clean up tag metadata after successful deletion
-	if (metadataResponse && metadata[validatedTag]) {
-		delete metadata[validatedTag];
-		await cache.put(
-			METADATA_KEY,
-			new Response(JSON.stringify(metadata), {
-				headers: { "Content-Type": "application/json" },
-			}),
-		);
-	}
+  // Clean up tag metadata after successful deletion
+  if (metadataResponse && metadata[validatedTag]) {
+    delete metadata[validatedTag];
+    await cache.put(
+      METADATA_KEY,
+      new Response(JSON.stringify(metadata), {
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  }
 
-	return deletedCount;
+  return deletedCount;
 }
 
 /**
@@ -97,73 +97,75 @@ export async function invalidateByTag(
  * ```
  */
 export async function invalidateByPath(
-	path: string,
-	options: InvalidationOptions = {},
+  path: string,
+  options: InvalidationOptions = {},
 ): Promise<number> {
-	const cache = await getCache(options);
+  const cache = await getCache(options);
 
-	// In Deno, we can't enumerate cache keys, so we work with metadata
-	const metadataResponse = await cache.match(METADATA_KEY);
-	if (!metadataResponse) {
-		return 0; // No metadata means no tracked entries
-	}
+  // In Deno, we can't enumerate cache keys, so we work with metadata
+  const metadataResponse = await cache.match(METADATA_KEY);
+  if (!metadataResponse) {
+    return 0; // No metadata means no tracked entries
+  }
 
-	let metadata: Record<string, string[]> = {};
-	try {
-		metadata = await metadataResponse.json();
-	} catch (error) {
-		console.warn("Failed to parse invalidation metadata:", error);
-		return 0;
-	}
+  let metadata: Record<string, string[]> = {};
+  try {
+    metadata = await metadataResponse.json();
+  } catch (error) {
+    console.warn("Failed to parse invalidation metadata:", error);
+    return 0;
+  }
 
-	let deletedCount = 0;
-	const keysToDelete = new Set<string>();
+  let deletedCount = 0;
+  const keysToDelete = new Set<string>();
 
-	// Find all cache keys that match the path
-	for (const tag in metadata) {
-		for (const key of metadata[tag]) {
-			try {
-				const url = new URL(key);
-				const requestPath = url.pathname;
+  // Find all cache keys that match the path
+  for (const tag in metadata) {
+    const list = metadata[tag];
+    if (!Array.isArray(list)) continue;
+    for (const key of list) {
+      try {
+        const url = new URL(key);
+        const requestPath = url.pathname;
 
-				if (requestPath === path || requestPath.startsWith(`${path}/`)) {
-					keysToDelete.add(key);
-				}
-			} catch {
-				// Skip malformed URLs
-			}
-		}
-	}
+        if (requestPath === path || requestPath.startsWith(`${path}/`)) {
+          keysToDelete.add(key);
+        }
+      } catch {
+        // Skip malformed URLs
+      }
+    }
+  }
 
-	// Delete the matching entries
-	for (const key of keysToDelete) {
-		const deleted = await cache.delete(key);
-		if (deleted) {
-			deletedCount++;
-		}
-	}
+  // Delete the matching entries
+  for (const key of keysToDelete) {
+    const deleted = await cache.delete(key);
+    if (deleted) {
+      deletedCount++;
+    }
+  }
 
-	// Clean up metadata for deleted entries
-	if (deletedCount > 0) {
-		const updatedMetadata: Record<string, string[]> = {};
-		for (const tag in metadata) {
-			updatedMetadata[tag] = metadata[tag].filter(
-				(key) => !keysToDelete.has(key),
-			);
-			if (updatedMetadata[tag].length === 0) {
-				delete updatedMetadata[tag];
-			}
-		}
+  // Clean up metadata for deleted entries
+  if (deletedCount > 0) {
+    const updatedMetadata: Record<string, string[]> = {};
+    for (const tag in metadata) {
+      const list = metadata[tag];
+      if (!Array.isArray(list) || list.length === 0) continue;
+      const filtered = list.filter((key) => !keysToDelete.has(key));
+      if (filtered.length > 0) {
+        updatedMetadata[tag] = filtered;
+      }
+    }
 
-		await cache.put(
-			METADATA_KEY,
-			new Response(JSON.stringify(updatedMetadata), {
-				headers: { "Content-Type": "application/json" },
-			}),
-		);
-	}
+    await cache.put(
+      METADATA_KEY,
+      new Response(JSON.stringify(updatedMetadata), {
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  }
 
-	return deletedCount;
+  return deletedCount;
 }
 
 /**
@@ -191,46 +193,46 @@ export async function invalidateByPath(
  * ```
  */
 export async function invalidateAll(
-	options: InvalidationOptions = {},
+  options: InvalidationOptions = {},
 ): Promise<number> {
-	const cache = await getCache(options);
+  const cache = await getCache(options);
 
-	// In Deno, we can't enumerate cache keys, so we work with metadata
-	const metadataResponse = await cache.match(METADATA_KEY);
-	if (!metadataResponse) {
-		return 0; // No metadata means no tracked entries
-	}
+  // In Deno, we can't enumerate cache keys, so we work with metadata
+  const metadataResponse = await cache.match(METADATA_KEY);
+  if (!metadataResponse) {
+    return 0; // No metadata means no tracked entries
+  }
 
-	let metadata: Record<string, string[]> = {};
-	try {
-		metadata = await metadataResponse.json();
-	} catch (error) {
-		console.warn("Failed to parse invalidation metadata:", error);
-		return 0;
-	}
+  let metadata: Record<string, string[]> = {};
+  try {
+    metadata = await metadataResponse.json();
+  } catch (error) {
+    console.warn("Failed to parse invalidation metadata:", error);
+    return 0;
+  }
 
-	let deletedCount = 0;
-	const keysToDelete = new Set<string>();
+  let deletedCount = 0;
+  const keysToDelete = new Set<string>();
 
-	// Collect all cache keys from metadata
-	for (const tag in metadata) {
-		for (const key of metadata[tag]) {
-			keysToDelete.add(key);
-		}
-	}
+  // Collect all cache keys from metadata
+  for (const tag in metadata) {
+    const list = metadata[tag];
+    if (!Array.isArray(list)) continue;
+    for (const key of list) keysToDelete.add(key);
+  }
 
-	// Delete all entries
-	for (const key of keysToDelete) {
-		const deleted = await cache.delete(key);
-		if (deleted) {
-			deletedCount++;
-		}
-	}
+  // Delete all entries
+  for (const key of keysToDelete) {
+    const deleted = await cache.delete(key);
+    if (deleted) {
+      deletedCount++;
+    }
+  }
 
-	// Clear metadata
-	await cache.delete(METADATA_KEY);
+  // Clear metadata
+  await cache.delete(METADATA_KEY);
 
-	return deletedCount;
+  return deletedCount;
 }
 
 /**
@@ -263,35 +265,35 @@ export async function invalidateAll(
  * ```
  */
 export async function getCacheStats(
-	options: InvalidationOptions = {},
+  options: InvalidationOptions = {},
 ): Promise<{ totalEntries: number; entriesByTag: Record<string, number> }> {
-	const cache = await getCache(options);
-	const metadataResponse = await cache.match(METADATA_KEY);
-	if (!metadataResponse) {
-		return { totalEntries: 0, entriesByTag: {} };
-	}
+  const cache = await getCache(options);
+  const metadataResponse = await cache.match(METADATA_KEY);
+  if (!metadataResponse) {
+    return { totalEntries: 0, entriesByTag: {} };
+  }
 
-	let metadata: Record<string, string[]> = {};
-	try {
-		metadata = await metadataResponse.json();
-	} catch (error) {
-		console.warn(
-			"Failed to parse cache stats metadata, using empty object:",
-			error,
-		);
-		metadata = {};
-	}
-	const entriesByTag: Record<string, number> = {};
-	const uniqueKeys = new Set<string>();
+  let metadata: Record<string, string[]> = {};
+  try {
+    metadata = await metadataResponse.json();
+  } catch (error) {
+    console.warn(
+      "Failed to parse cache stats metadata, using empty object:",
+      error,
+    );
+    metadata = {};
+  }
+  const entriesByTag: Record<string, number> = {};
+  const uniqueKeys = new Set<string>();
 
-	for (const tag in metadata) {
-		entriesByTag[tag] = metadata[tag].length;
-		for (const key of metadata[tag]) {
-			uniqueKeys.add(key);
-		}
-	}
+  for (const tag in metadata) {
+    const list = metadata[tag];
+    if (!Array.isArray(list)) continue;
+    entriesByTag[tag] = list.length;
+    for (const key of list) uniqueKeys.add(key);
+  }
 
-	return { totalEntries: uniqueKeys.size, entriesByTag };
+  return { totalEntries: uniqueKeys.size, entriesByTag };
 }
 
 /**
@@ -320,12 +322,12 @@ export async function getCacheStats(
  * ```
  */
 export async function regenerateCacheStats(
-	options: InvalidationOptions = {},
+  options: InvalidationOptions = {},
 ): Promise<{ totalEntries: number; entriesByTag: Record<string, number> }> {
-	// In Deno, we can't enumerate cache keys, so this function cannot work
-	// without the ability to list all cache entries. Return empty stats.
-	console.warn(
-		"regenerateCacheStats: Cannot enumerate cache keys in Deno environment",
-	);
-	return { totalEntries: 0, entriesByTag: {} };
+  // In Deno, we can't enumerate cache keys, so this function cannot work
+  // without the ability to list all cache entries. Return empty stats.
+  console.warn(
+    "regenerateCacheStats: Cannot enumerate cache keys in Deno environment",
+  );
+  return { totalEntries: 0, entriesByTag: {} };
 }
