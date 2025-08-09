@@ -7,6 +7,7 @@
 		"useTabs": true,
 		"useBraces": "always",
 		"singleBodyPosition": "nextLine",
+		"proseWrap": "never",
 		"exclude": [
 			"**/*/package.json",
 			"pnpm-lock.yaml",
