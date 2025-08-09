@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { createCacheHandler } from "../../src/index.js";
+import { createCacheHandler } from "../../src/index.ts";
 
 describe("Unified Cache Handler - Workerd Environment", () => {
 	beforeEach(async () => {

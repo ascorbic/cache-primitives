@@ -5,8 +5,8 @@ import {
 	generateETag,
 	parseETag,
 	validateConditionalRequest,
-} from "../../src/conditional.js";
-import { createCacheHandler } from "../../src/handlers.js";
+} from "../../src/conditional.ts";
+import { createCacheHandler } from "../../src/handlers.ts";
 
 describe("Conditional Requests - Node.js with undici", () => {
 	describe("ETag utilities", () => {

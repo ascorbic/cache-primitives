@@ -33,7 +33,6 @@
     "packageJson": {
       "dependencies": [
         "npm:@changesets/cli@^2.27.7",
-        "npm:prettier@^3.3.1",
         "npm:tsdoc-markdown@0.6",
         "npm:tsdown@~0.13.3",
         "npm:typescript@^5.9.2"

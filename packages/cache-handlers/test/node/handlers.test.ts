@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { caches, Request, Response } from "undici";
-import { createCacheHandler } from "../../src/handlers.js";
+import { createCacheHandler } from "../../src/handlers.ts";
 
 describe("Cache Handler - Node.js with undici", () => {
 	beforeEach(async () => {

@@ -61,12 +61,7 @@ export async function invalidateByTag(
 	// Clean up tag metadata after successful deletion
 	if (metadataResponse && metadata[validatedTag]) {
 		delete metadata[validatedTag];
-		await cache.put(
-			METADATA_KEY,
-			new Response(JSON.stringify(metadata), {
-				headers: { "Content-Type": "application/json" },
-			}),
-		);
+		await cache.put(METADATA_KEY, Response.json(metadata));
 	}
 
 	return deletedCount;
@@ -161,12 +156,7 @@ export async function invalidateByPath(
 			}
 		}
 
-		await cache.put(
-			METADATA_KEY,
-			new Response(JSON.stringify(updatedMetadata), {
-				headers: { "Content-Type": "application/json" },
-			}),
-		);
+		await cache.put(METADATA_KEY, Response.json(updatedMetadata));
 	}
 
 	return deletedCount;
@@ -336,10 +326,75 @@ export async function getCacheStats(
 export async function regenerateCacheStats(
 	options: InvalidationOptions = {},
 ): Promise<{ totalEntries: number; entriesByTag: Record<string, number> }> {
-	// In Deno, we can't enumerate cache keys, so this function cannot work
-	// without the ability to list all cache entries. Return empty stats.
-	console.warn(
-		"regenerateCacheStats: Cannot enumerate cache keys in Deno environment",
-	);
-	return { totalEntries: 0, entriesByTag: {} };
+	const cache = await getCache(options);
+	interface CacheWithKeys extends Cache {
+		keys(): Promise<Request[]>;
+	}
+	if (!("keys" in cache)) {
+		console.warn(
+			"regenerateCacheStats: cache.keys() not supported in this runtime; returning empty stats",
+		);
+		return { totalEntries: 0, entriesByTag: {} };
+	}
+
+	let requests: Request[] = [];
+	try {
+		requests = await (cache as unknown as CacheWithKeys).keys();
+	} catch (err) {
+		console.warn("regenerateCacheStats: failed to enumerate cache keys", err);
+		return { totalEntries: 0, entriesByTag: {} };
+	}
+
+	const metadata: Record<string, string[]> = {};
+	const uniqueKeys = new Set<string>();
+
+	for (const req of requests) {
+		const url = req.url;
+		if (url === METADATA_KEY) {
+			continue; // skip old metadata entry
+		}
+		uniqueKeys.add(url);
+
+		let response: Response | undefined;
+		try {
+			response = await cache.match(req) as Response | undefined;
+		} catch {
+			continue;
+		}
+		if (!response) {
+			continue;
+		}
+		const tagHeader = response.headers.get("cache-tag");
+		if (!tagHeader) {
+			continue; // cannot reconstruct tags if they were stripped
+		}
+		const tags = parseCacheTags(tagHeader);
+		for (const tag of tags) {
+			if (!metadata[tag]) {
+				metadata[tag] = [];
+			}
+			metadata[tag].push(url);
+		}
+	}
+
+	// Write rebuilt metadata (best-effort)
+	try {
+		await cache.put(METADATA_KEY, Response.json(metadata));
+	} catch (err) {
+		console.warn(
+			"regenerateCacheStats: failed to persist rebuilt metadata",
+			err,
+		);
+	}
+
+	const entriesByTag: Record<string, number> = {};
+	for (const tag in metadata) {
+		const list = metadata[tag];
+		if (!Array.isArray(list)) {
+			continue;
+		}
+		entriesByTag[tag] = list.length;
+	}
+
+	return { totalEntries: uniqueKeys.size, entriesByTag };
 }

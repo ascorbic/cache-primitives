@@ -1,6 +1,8 @@
 {
 	"typescript.tsdk": "node_modules/typescript/lib",
-	"deno.enablePaths": ["packages/cache-handlers/test/deno"],
+	"deno.enablePaths": [
+		"packages/cache-handlers/"
+	],
 	"deno.config": "./deno.json",
 	"deno.suggest.imports.hosts": {
 		"https://deno.land": true,

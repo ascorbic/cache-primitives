@@ -575,6 +575,7 @@ export function validateCacheTag(tag: string): string {
 	}
 
 	// Remove ALL control characters (0-31) and DEL (127) except space (32)
+	// deno-lint-ignore no-control-regex
 	const sanitized = tag.replace(/[\x00-\x1F\x7F]/g, "").trim();
 
 	if (sanitized.length === 0) {

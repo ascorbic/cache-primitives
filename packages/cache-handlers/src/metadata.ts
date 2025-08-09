@@ -238,6 +238,6 @@ export async function cleanupVaryMetadata(
 
 			return cleanedMetadata;
 		},
-		{} as Record<string, any>,
+		{} as const,
 	);
 }

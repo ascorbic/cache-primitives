@@ -4,7 +4,7 @@ import {
 	invalidateAll,
 	invalidateByPath,
 	invalidateByTag,
-} from "../../src/invalidation.js";
+} from "../../src/invalidation.ts";
 
 describe("Cache Invalidation - Workerd Environment", () => {
 	beforeEach(async () => {

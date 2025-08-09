@@ -19,9 +19,11 @@ export async function readFromCache(
 	const getCacheKey = config.getCacheKey || defaultGetCacheKey;
 	const cache = await getCache(config);
 	const varyMetadataResponse = await cache.match(VARY_METADATA_KEY);
+	// deno-lint-ignore no-explicit-any
 	let varyMetadata: Record<string, any> = {};
 	varyMetadata = await safeJsonParse(
 		varyMetadataResponse?.clone() || null,
+		// deno-lint-ignore no-explicit-any
 		{} as Record<string, any>,
 		"vary metadata parsing in cache handler",
 	);
