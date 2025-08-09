@@ -1,3 +1,18 @@
 {
-  "workspace": ["packages/cdn-cache-control"]
+	"workspace": ["packages/cdn-cache-control"],
+	"imports": {
+		"@std/assert": "jsr:@std/assert@^1.0.13"
+	},
+	"fmt": {
+		"useTabs": true,
+		"useBraces": "always",
+		"singleBodyPosition": "nextLine",
+		"proseWrap": "never",
+		"exclude": [
+			"**/*/package.json",
+			"pnpm-lock.yaml",
+			"**/*/CHANGELOG.md",
+			"package.json"
+		]
+	}
 }

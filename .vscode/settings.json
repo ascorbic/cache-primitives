@@ -1,3 +1,19 @@
 {
-    "typescript.tsdk": "node_modules/typescript/lib"
+	"typescript.tsdk": "node_modules/typescript/lib",
+	"deno.enable": true,
+	"deno.config": "./deno.json",
+	"deno.suggest.imports.hosts": {
+		"https://deno.land": true,
+		"https://jsr.io": true
+	},
+	"[typescript]": {
+		"editor.defaultFormatter": "denoland.vscode-deno"
+	},
+	"[javascript]": {
+		"editor.defaultFormatter": "denoland.vscode-deno"
+	},
+	"prettier.enable": false,
+	"deno.enablePaths": [
+		"packages"
+	]
 }

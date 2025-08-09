@@ -1,8 +1,8 @@
 {
-  "files": [],
-  "references": [
-    {
-      "path": "./packages/cdn-cache-control"
-    }
-  ]
+	"files": [],
+	"references": [
+		{
+			"path": "./packages/cdn-cache-control"
+		}
+	]
 }
