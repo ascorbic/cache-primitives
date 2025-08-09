@@ -1,8 +1,6 @@
 {
 	"typescript.tsdk": "node_modules/typescript/lib",
-	"deno.enablePaths": [
-		"packages/cache-handlers/"
-	],
+	"deno.enable": true,
 	"deno.config": "./deno.json",
 	"deno.suggest.imports.hosts": {
 		"https://deno.land": true,
@@ -13,5 +11,9 @@
 	},
 	"[javascript]": {
 		"editor.defaultFormatter": "denoland.vscode-deno"
-	}
+	},
+	"prettier.enable": false,
+	"deno.enablePaths": [
+		"packages"
+	]
 }
