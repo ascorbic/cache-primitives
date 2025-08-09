@@ -1,5 +1,7 @@
 import { assert, assertEquals, assertExists } from "@std/assert";
-import { createReadHandler, createWriteHandler } from "../../src/handlers.ts";
+// Use internal test-only helpers (not exported from package entrypoint)
+import { readFromCache } from "../../src/read.ts";
+import { writeToCache } from "../../src/write.ts";
 import {
   defaultGetCacheKey,
   isCacheValid,
@@ -166,9 +168,9 @@ Deno.test("Edge Cases - Unicode and special characters in cache tags", () => {
 });
 
 Deno.test("Edge Cases - Concurrent cache operations simulation", async () => {
-  const cache = await caches.open("test");
-  const readHandler = createReadHandler({ cacheName: "test" });
-  const writeHandler = createWriteHandler({ cacheName: "test" });
+  await caches.delete("test");
+  await caches.open("test");
+  const config = { cacheName: "test" } as const;
 
   // Simulate concurrent writes to the same cache key
   const promises: Promise<unknown>[] = [];
@@ -186,7 +188,7 @@ Deno.test("Edge Cases - Concurrent cache operations simulation", async () => {
     });
 
     const request = new Request("https://example.com/api/concurrent");
-    promises.push(writeHandler(request, response));
+    promises.push(writeToCache(request, response, config));
   }
 
   // Wait for all writes to complete
@@ -194,7 +196,7 @@ Deno.test("Edge Cases - Concurrent cache operations simulation", async () => {
 
   // Verify final state - should have one cached entry (last write wins)
   const request = new Request("https://example.com/api/concurrent");
-  const result = await readHandler(request);
+  const { cached: result } = await readFromCache(request, config);
 
   assertExists(result);
   const text = await result.text();
@@ -204,7 +206,7 @@ Deno.test("Edge Cases - Concurrent cache operations simulation", async () => {
 });
 
 Deno.test("Edge Cases - Very large response bodies", async () => {
-  const writeHandler = createWriteHandler({ cacheName: "test" });
+  const config = { cacheName: "test" } as const;
 
   // Create a response with a very large body (10MB of data)
   const largeData = "x".repeat(10 * 1024 * 1024);
@@ -222,7 +224,7 @@ Deno.test("Edge Cases - Very large response bodies", async () => {
 
   const start = Date.now();
   const request = new Request("https://example.com/api/large");
-  const result = await writeHandler(request, response.clone());
+  const result = await writeToCache(request, response.clone(), config);
   const duration = Date.now() - start;
 
   assertExists(result);
@@ -308,7 +310,7 @@ Deno.test("Edge Cases - Cache key collision scenarios", () => {
 });
 
 Deno.test("Edge Cases - Massive tag-based invalidation", async () => {
-  const writeHandler = createWriteHandler({ cacheName: "test" });
+  const config = { cacheName: "test" } as const;
   await caches.delete("test"); // Clean start
 
   // Create a smaller but still significant number of cache entries with overlapping tags
@@ -330,7 +332,7 @@ Deno.test("Edge Cases - Massive tag-based invalidation", async () => {
     });
 
     const request = new Request(`https://example.com/api/item/${i}`);
-    await writeHandler(request, response);
+    await writeToCache(request, response, config);
   }
 
   // Test invalidation performance
@@ -351,7 +353,7 @@ Deno.test("Edge Cases - Massive tag-based invalidation", async () => {
 });
 
 Deno.test("Edge Cases - Path invalidation with complex paths", async () => {
-  const writeHandler = createWriteHandler({ cacheName: "test" });
+  const config = { cacheName: "test" } as const;
 
   // Add entries with proper metadata using writeHandler
   const paths = [
@@ -376,7 +378,7 @@ Deno.test("Edge Cases - Path invalidation with complex paths", async () => {
       },
     });
     const request = new Request(`https://example.com${path}`);
-    await writeHandler(request, response);
+    await writeToCache(request, response, config);
   }
 
   // Test path invalidation
@@ -396,8 +398,8 @@ Deno.test("Edge Cases - Path invalidation with complex paths", async () => {
 });
 
 Deno.test("Edge Cases - Response cloning edge cases", async () => {
-  const cache = await caches.open("test");
-  const writeHandler = createWriteHandler({ cacheName: "test" });
+  await caches.open("test");
+  const config = { cacheName: "test" } as const;
 
   // Test with response that has been partially consumed
   const response = new Response("test data", {
@@ -422,7 +424,7 @@ Deno.test("Edge Cases - Response cloning edge cases", async () => {
   // Note: This may fail depending on implementation details
   try {
     const request = new Request("https://example.com/api/test");
-    const result = await writeHandler(request, response);
+    const result = await writeToCache(request, response, config);
     assertExists(result);
   } catch (error) {
     // Expected if response body is already consumed

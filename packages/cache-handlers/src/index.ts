@@ -1,37 +1,4 @@
 /**
- * Main factory function for creating cache handlers.
- *
- * @example
- * ```typescript
- * import { createCacheHandlers } from "cache-primitives";
- *
- * const { read, write, middleware } = createCacheHandlers({
- *   cacheName: "my-app-cache",
- *   defaultTtl: 300,
- *   maxTtl: 86400
- * });
- * ```
- */
-export { createCacheHandlers } from "./factory.ts";
-
-/**
- * Individual handler creators for fine-grained control.
- *
- * @example
- * ```typescript
- * import { createReadHandler, createWriteHandler } from "cache-primitives";
- *
- * const readHandler = createReadHandler({ cacheName: "read-cache" });
- * const writeHandler = createWriteHandler({ cacheName: "write-cache" });
- * ```
- */
-export {
-	createMiddlewareHandler,
-	createReadHandler,
-	createWriteHandler,
-} from "./handlers.ts";
-
-/**
  * Cache invalidation and statistics utilities.
  *
  * @example
@@ -162,29 +129,27 @@ export {
  * ```typescript
  * import type {
  *   CacheConfig,
- *   MiddlewareHandler,
- *   ReadHandler,
- *   WriteHandler
+ *   CacheHandle,
  * } from "cache-primitives";
  *
- * const config: CacheConfig = {
- *   cacheName: "my-cache",
- *   defaultTtl: 300
- * };
- *
- * const handler: MiddlewareHandler = createMiddlewareHandler(config);
+ * const handle = createCacheHandler({ cacheName: "my-cache" });
  * ```
  */
 export type {
 	CacheConfig,
-	CacheHandlers,
-	CacheVary,
+	CacheHandle,
+	CacheHandleOptions,
 	ConditionalRequestConfig,
 	ConditionalValidationResult,
+	CreateCacheHandlerOptions,
+	HandlerFunction as UnifiedHandlerFn,
+	HandlerInfo,
+	HandlerMode,
 	InvalidationOptions,
-	MiddlewareHandler,
 	ParsedCacheHeaders,
-	ReadHandler,
 	RevalidationHandler,
-	WriteHandler,
+	SWRPolicy,
 } from "./types.ts";
+
+// Public unified cache handler (intentionally do NOT export low-level read/write helpers)
+export { createCacheHandler } from "./handlers.ts";

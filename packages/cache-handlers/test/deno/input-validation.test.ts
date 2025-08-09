@@ -1,9 +1,6 @@
 import { assert, assertEquals, assertExists } from "@std/assert";
-import {
-  createMiddlewareHandler,
-  createReadHandler,
-  createWriteHandler,
-} from "../../src/handlers.ts";
+import { writeToCache } from "../../src/write.ts";
+import { readFromCache } from "../../src/read.ts";
 import {
   defaultGetCacheKey,
   parseCacheControl,
@@ -85,7 +82,7 @@ Deno.test("Input Validation - Malicious cache control directives", () => {
 });
 
 Deno.test("Input Validation - Invalid header names and values", async () => {
-  const writeHandler = createWriteHandler({ cacheName: "test" });
+  const writeConfig = { cacheName: "test" } as const;
 
   // Test with various invalid header scenarios
   const testCases = [
@@ -134,7 +131,7 @@ Deno.test("Input Validation - Invalid header names and values", async () => {
 
       // Should handle invalid headers without throwing
       const request = new Request("https://example.com/api/test");
-      const result = await writeHandler(request, response);
+      const result = await writeToCache(request, response, writeConfig);
       assertExists(result, `Failed for test case: ${testCase.name}`);
       assertEquals(result.headers.has("cache-tag"), false);
     } catch (error) {
@@ -223,7 +220,7 @@ Deno.test("Input Validation - Request URLs with injection attempts", () => {
 Deno.test(
   "Input Validation - Response with malicious status and headers",
   async () => {
-    const writeHandler = createWriteHandler({ cacheName: "test" });
+    const writeConfig = { cacheName: "test" } as const;
 
     // Test various malicious response configurations
     const testCases = [
@@ -268,7 +265,7 @@ Deno.test(
 
         // Should handle malicious response properties without throwing
         const request = new Request("https://example.com/api/test");
-        const result = await writeHandler(request, response);
+        const result = await writeToCache(request, response, writeConfig);
         assertExists(result, `Failed for test case: ${testCase.name}`);
         assertEquals(result.status, testCase.status);
         assertEquals(result.statusText, testCase.statusText);
@@ -424,16 +421,17 @@ Deno.test(
 
     for (const config of maliciousConfigs) {
       // Should create handlers without issues despite malicious config
-      const readHandler = createReadHandler({ cacheName: "test", ...config });
-      const writeHandler = createWriteHandler({ cacheName: "test", ...config });
-      const middlewareHandler = createMiddlewareHandler({
-        cacheName: "test",
-        ...config,
+      // Construct helpers to ensure config doesn't break them
+      const mergedConfig = { cacheName: "test", ...config };
+      // Basic write then read cycle
+      const req = new Request("https://example.com/api/config-test");
+      const resp = new Response("data", {
+        headers: { "cache-control": "max-age=1" },
       });
-
-      assertEquals(typeof readHandler, "function");
-      assertEquals(typeof writeHandler, "function");
-      assertEquals(typeof middlewareHandler, "function");
+      const written = await writeToCache(req, resp, mergedConfig);
+      assertExists(written);
+      const { cached } = await readFromCache(req, mergedConfig);
+      if (cached) await cached.text();
 
       // Verify no prototype pollution occurred
       assertEquals(
@@ -452,7 +450,7 @@ Deno.test(
   "Input Validation - Extremely deep object nesting in metadata",
   async () => {
     const cache = await caches.open("test");
-    const readHandler = createReadHandler({ cacheName: "test" });
+    const config = { cacheName: "test" } as const;
 
     // Create deeply nested malicious metadata
     let deepObject: unknown = { value: "base" };
@@ -460,13 +458,7 @@ Deno.test(
       deepObject = { nested: deepObject, level: i };
     }
 
-    const maliciousMetadata = {
-      tags: ["user"],
-      ttl: 3600,
-      cachedAt: Date.now(),
-      originalHeaders: {},
-      deepNesting: deepObject,
-    };
+    // Deep object created above to simulate potential stack stress
 
     const cacheKey = "https://example.com/api/test";
     const response = new Response("test data", {
@@ -481,7 +473,7 @@ Deno.test(
     const request = new Request("https://example.com/api/test");
 
     // Should handle deeply nested objects without stack overflow
-    const result = await readHandler(request);
+    const { cached: result } = await readFromCache(request, config);
 
     // Should either return the response or null if parsing fails
     // Either outcome is acceptable for malformed/malicious metadata

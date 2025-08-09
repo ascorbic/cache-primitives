@@ -182,8 +182,6 @@ export interface CacheVary {
 	query: string[];
 }
 
-// CacheMetadata removed - now using standard HTTP headers instead
-
 /**
  * Parsed cache header information from a Response.
  * Contains all caching directives and metadata extracted from HTTP headers.
@@ -267,106 +265,85 @@ export interface ParsedCacheHeaders {
 }
 
 /**
- * Handler that checks for cached responses using standard HTTP headers.
- *
- * Includes robust error handling for corrupted metadata and automatic
- * cache validation using the Expires header. Returns null if no valid
- * cached response is found.
- *
- * @example
- * ```typescript
- * const readHandler: ReadHandler = createReadHandler();
- * const request = new Request("https://api.example.com/users");
- * const cachedResponse = await readHandler(request);
- *
- * if (cachedResponse) {
- *   console.log("Cache hit!");
- *   return cachedResponse;
- * }
- * ```
- */
-export interface ReadHandler {
-	(request: Request): Promise<Response | null>;
-}
-
-/**
- * Handler that caches responses using both request and response context.
- *
- * The request parameter enables proper cache key generation and supports
- * request-aware caching strategies. Uses standard HTTP headers for cache
- * metadata and includes comprehensive input validation.
- *
- * @example
- * ```typescript
- * const writeHandler: WriteHandler = createWriteHandler();
- * const request = new Request("https://api.example.com/users");
- * const response = new Response(JSON.stringify({users: []}), {
- *   headers: {
- *     "cache-control": "max-age=3600, public",
- *     "cache-tag": "users, api"
- *   }
- * });
- *
- * const cachedResponse = await writeHandler(request, response);
- * ```
- */
-export interface WriteHandler {
-	(request: Request, response: Response): Promise<Response>;
-}
-
-/**
- * Middleware handler that combines read and write operations.
- *
- * Automatically manages the complete cache flow: checks for cached responses
- * first, then processes fresh responses through the write handler if no
- * cached version exists.
- *
- * @example
- * ```typescript
- * const middlewareHandler: MiddlewareHandler = createMiddlewareHandler();
- *
- * const response = await middlewareHandler(request, async () => {
- *   // Your application logic here
- *   return new Response("Hello World", {
- *     headers: {
- *       "cache-control": "max-age=300, public",
- *       "cache-tag": "greeting"
- *     }
- *   });
- * });
- * ```
- */
-export interface MiddlewareHandler {
-	(request: Request, next: () => Promise<Response>): Promise<Response>;
-}
-
-/**
  * Revalidation handler function for stale-while-revalidate support.
  * Called when content needs to be revalidated in the background.
  *
  * @example
  * ```typescript
- * const revalidateHandler: RevalidationHandler = async (request) => {
- *   // Fetch fresh content and update cache
- *   const response = await fetch(request.url);
- *   return response;
- * };
+ * const revalidateHandler: RevalidationHandler = async (request) => fetch(request.url);
  * ```
  */
 export interface RevalidationHandler {
 	(request: Request): Promise<Response>;
 }
 
+// --- Higher-level handler API ---
+
 /**
- * Collection of all cache handler types.
- * Returned by the createCacheHandlers factory function.
+ * Render / handling mode information passed to user handler.
+ * - miss: cache miss foreground render
+ * - stale: background refresh in progress
+ * - manual: manual revalidation trigger
  */
-export interface CacheHandlers {
-	read: ReadHandler;
-	write: WriteHandler;
-	middleware: MiddlewareHandler;
-	revalidate?: RevalidationHandler;
+export type HandlerMode = "miss" | "stale" | "manual";
+
+export interface HandlerInfo {
+	mode: HandlerMode;
+	background: boolean;
 }
+
+/**
+ * User provided handler function.
+ */
+export type HandlerFunction = (
+	request: Request,
+	info: HandlerInfo,
+) => Promise<Response>;
+
+/**
+ * SWR policy (reserved for future strategies).
+ */
+export type SWRPolicy = "background" | "blocking" | "off";
+
+/**
+ * Options for createCacheHandler. Extends CacheConfig with higher-level
+ * handler settings. SWR behaviour beyond simple miss handling will be
+ * added in subsequent iterations.
+ */
+export interface CreateCacheHandlerOptions extends CacheConfig {
+	/** Default handler used on cache misses. */
+	handler?: HandlerFunction;
+
+	/** SWR policy (future). */
+	swr?: SWRPolicy;
+
+	/** Deduplication window (ms) for background revalidation. */
+	dedupeMs?: number;
+
+	/**
+	 * Background scheduler analogous to waitUntil.
+	 */
+	runInBackground?: (p: Promise<any>) => void;
+}
+
+export interface CacheHandleFunctionOptions {
+	handler?: HandlerFunction;
+	runInBackground?: (p: Promise<any>) => void;
+	swr?: SWRPolicy;
+}
+/**
+ * Call options for createCacheHandler returned function.
+ */
+export interface CacheHandleOptions extends CacheHandleFunctionOptions {}
+
+/**
+ * Bare cache handle function returned by createCacheHandler.
+ * Performs read -> (miss -> handler -> write) flow. No attached methods.
+ */
+export type CacheHandle = (
+	request: Request,
+	options?: CacheHandleOptions,
+) => Promise<Response>;
 
 /**
  * Options for cache invalidation operations.

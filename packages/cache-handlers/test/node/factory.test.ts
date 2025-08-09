@@ -1,60 +1,43 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { caches, Request, Response } from "undici";
-import { createCacheHandlers } from "../../src/index.js";
+import { createCacheHandler } from "../../src/index.js";
 
-describe("Cache Factory - Node.js with undici", () => {
+describe("Unified Cache Handler - Node.js with undici", () => {
   beforeEach(async () => {
     // Clean up test cache before each test
     await caches.delete("test");
   });
 
-  test("createCacheHandlers - creates all handlers", async () => {
-    const handlers = createCacheHandlers({ cacheName: "test" });
-
-    expect(handlers.read).toBeTruthy();
-    expect(handlers.write).toBeTruthy();
-    expect(handlers.middleware).toBeTruthy();
-    expect(typeof handlers.read).toBe("function");
-    expect(typeof handlers.write).toBe("function");
-    expect(typeof handlers.middleware).toBe("function");
-  });
-
-  test("handlers work together in integration", async () => {
-    const { read, write, middleware } = createCacheHandlers({
-      cacheName: "test",
-    });
-
+  test("cache miss then hit integration", async () => {
+    const cacheName = "test";
+    const handle = createCacheHandler({ cacheName });
     const request = new Request("http://example.com/api/data");
-
-    // Initially no cache hit
-    const cacheResult = await read(request);
-    expect(cacheResult).toBe(null);
-
-    // Write a response to cache
-    const response = new Response("integration test data", {
-      headers: {
-        "cache-control": "max-age=3600, public",
-        "cache-tag": "integration",
-        "content-type": "application/json",
-      },
+    let invoked = 0;
+    // First call (miss)
+    const miss = await handle(request as any, {
+      handler: (() => {
+        invoked++;
+        return Promise.resolve(
+          new Response("integration test data", {
+            headers: {
+              "cache-control": "max-age=3600, public",
+              "cache-tag": "integration",
+              "content-type": "application/json",
+            },
+          }),
+        );
+      }) as any,
     });
-
-    const processedResponse = await write(request, response);
-    expect(processedResponse.headers.has("cache-tag")).toBe(false);
-
-    // Now should get cache hit
-    const cachedResult = await read(request);
-    expect(cachedResult).toBeTruthy();
-    expect(await cachedResult!.text()).toBe("integration test data");
-
-    // Middleware should also work
-    let nextCalled = false;
-    const middlewareResult = await middleware(request, () => {
-      nextCalled = true;
-      return Promise.resolve(new Response("should not be called"));
+    expect(invoked).toBe(1);
+    expect(await miss.clone().text()).toBe("integration test data");
+    // Second call (hit)
+    const hit = await handle(request as any, {
+      handler: (() => {
+        invoked++;
+        return Promise.resolve(new Response("should not be called"));
+      }) as any,
     });
-
-    expect(nextCalled).toBe(false);
-    expect(await middlewareResult.text()).toBe("integration test data");
+    expect(invoked).toBe(1);
+    expect(await hit.text()).toBe("integration test data");
   });
 });

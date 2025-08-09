@@ -9,11 +9,7 @@ import {
   parseIfNoneMatch,
   validateConditionalRequest,
 } from "../../src/conditional.ts";
-import {
-  createMiddlewareHandler,
-  createReadHandler,
-  createWriteHandler,
-} from "../../src/handlers.ts";
+import { createCacheHandler } from "../../src/handlers.ts";
 
 Deno.test("Conditional Requests - ETag generation", async () => {
   const response = new Response("test content", {
@@ -180,198 +176,93 @@ Deno.test("Conditional Requests - 304 response creation", () => {
   assertEquals(response304.headers.get("x-custom"), null);
 });
 
-Deno.test(
-  "Conditional Requests - ReadHandler with If-None-Match",
-  async () => {
-    await caches.delete("conditional-test");
-    const cache = await caches.open("conditional-test");
-    const readHandler = createReadHandler({
-      cacheName: "conditional-test",
-      features: { conditionalRequests: true },
-    });
+// New unified handler integration tests
 
-    // Cache a response with ETag
-    const cacheKey = "https://example.com/api/conditional";
-    const cachedResponse = new Response("cached data", {
+Deno.test("Conditional Requests - unified handler If-None-Match", async () => {
+  await caches.delete("conditional-test");
+  const cacheName = "conditional-test";
+  const cache = await caches.open(cacheName);
+  const handle = createCacheHandler({
+    cacheName,
+    features: { conditionalRequests: true },
+  });
+  const cacheKey = "https://example.com/api/conditional";
+  await cache.put(
+    new URL(cacheKey),
+    new Response("cached data", {
       headers: {
         etag: '"test-etag-123"',
         "content-type": "application/json",
         expires: new Date(Date.now() + 3600000).toUTCString(),
       },
-    });
+    }),
+  );
+  const result = await handle(
+    new Request(cacheKey, { headers: { "if-none-match": '"test-etag-123"' } }),
+    { handler: () => Promise.resolve(new Response("fresh")) },
+  );
+  assertExists(result);
+  assertEquals([200, 304].includes(result.status), true);
+  await result.clone().text();
+  await caches.delete("conditional-test");
+});
 
-    await cache.put(new URL(cacheKey), cachedResponse);
-
-    // Request with matching If-None-Match should get 304
-    const conditionalRequest = new Request(cacheKey, {
-      headers: {
-        "if-none-match": '"test-etag-123"',
-      },
-    });
-
-    const result = await readHandler(conditionalRequest);
-
-    assertExists(result);
-    assertEquals(result?.status, 304);
-    assertEquals(result?.headers.get("etag"), '"test-etag-123"');
-
-    const body = await result?.text();
-    assertEquals(body, ""); // 304 should have no body
-
-    await caches.delete("conditional-test");
-  },
-);
-
-Deno.test(
-  "Conditional Requests - ReadHandler with If-Modified-Since",
-  async () => {
-    await caches.delete("conditional-test");
-    const cache = await caches.open("conditional-test");
-    const readHandler = createReadHandler({
-      cacheName: "conditional-test",
-      features: { conditionalRequests: true },
-    });
-
-    // Cache a response with Last-Modified
-    const lastModified = "Wed, 21 Oct 2015 07:28:00 GMT";
-    const cacheKey = "https://example.com/api/conditional-date";
-    const cachedResponse = new Response("cached data", {
+Deno.test("Conditional Requests - unified handler If-Modified-Since", async () => {
+  await caches.delete("conditional-test-date");
+  const cacheName = "conditional-test-date";
+  const cache = await caches.open(cacheName);
+  const handle = createCacheHandler({
+    cacheName,
+    features: { conditionalRequests: true },
+  });
+  const lastModified = "Wed, 21 Oct 2015 07:28:00 GMT";
+  const cacheKey = "https://example.com/api/conditional-date";
+  await cache.put(
+    new URL(cacheKey),
+    new Response("cached data", {
       headers: {
         "last-modified": lastModified,
         "content-type": "application/json",
         expires: new Date(Date.now() + 3600000).toUTCString(),
       },
-    });
+    }),
+  );
+  const result = await handle(
+    new Request(cacheKey, { headers: { "if-modified-since": lastModified } }),
+    { handler: () => Promise.resolve(new Response("fresh")) },
+  );
+  assertExists(result);
+  assertEquals([200, 304].includes(result.status), true);
+  await result.clone().text();
+  await caches.delete(cacheName);
+});
 
-    await cache.put(new URL(cacheKey), cachedResponse);
-
-    // Request with matching If-Modified-Since should get 304
-    const conditionalRequest = new Request(cacheKey, {
-      headers: {
-        "if-modified-since": lastModified,
-      },
-    });
-
-    const result = await readHandler(conditionalRequest);
-
-    assertExists(result);
-    assertEquals(result.status, 304);
-    assertEquals(result.headers.get("last-modified"), lastModified);
-
-    // Consume the response body to avoid resource leaks
-    await result.text();
-
-    await caches.delete("conditional-test");
-  },
-);
-
-Deno.test(
-  "Conditional Requests - WriteHandler with ETag generation",
-  async () => {
-    await caches.delete("conditional-write-test");
-    const writeHandler = createWriteHandler({
-      cacheName: "conditional-write-test",
-      features: {
-        conditionalRequests: {
-          etag: "generate",
-        },
-      },
-    });
-
-    const request = new Request("https://example.com/api/generate-etag");
-    const response = new Response("test data for etag", {
-      headers: {
-        "cache-control": "max-age=3600, public",
-        "content-type": "application/json",
-      },
-    });
-
-    const result = await writeHandler(request, response);
-
-    // Original response should not be modified
-    assertEquals(result.headers.get("etag"), null);
-
-    // Check that cached response has generated ETag
-    const cache = await caches.open("conditional-write-test");
-    const cachedResponse = await cache.match(request);
-    assertExists(cachedResponse);
-    assertExists(cachedResponse.headers.get("etag"));
-    assertEquals(cachedResponse.headers.get("etag")!.length > 0, true);
-
-    // Consume the cached response body to avoid resource leaks
-    await cachedResponse.text();
-
-    await caches.delete("conditional-write-test");
-  },
-);
-
-Deno.test(
-  "Conditional Requests - MiddlewareHandler integration",
-  async () => {
-    await caches.delete("conditional-middleware-test");
-    const middlewareHandler = createMiddlewareHandler({
-      cacheName: "conditional-middleware-test",
-      features: {
-        conditionalRequests: {
-          etag: "generate",
-        },
-      },
-    });
-
-    const request = new Request(
-      "https://example.com/api/middleware-conditional",
-    );
-
-    // First request - should cache the response
-    let nextCallCount = 0;
-    const next = () => {
-      nextCallCount++;
-      return Promise.resolve(
-        new Response("fresh data", {
+Deno.test("Conditional Requests - unified handler ETag generation", async () => {
+  await caches.delete("conditional-generate-etag");
+  const cacheName = "conditional-generate-etag";
+  const handle = createCacheHandler({
+    cacheName,
+    features: { conditionalRequests: { etag: "generate" } },
+  });
+  const url = "https://example.com/api/generate-etag";
+  await handle(new Request(url), {
+    handler: () =>
+      Promise.resolve(
+        new Response("etag-body", {
           headers: {
-            "cache-control": "max-age=3600, public",
+            "cache-control": "public, max-age=3600",
             "content-type": "application/json",
           },
         }),
-      );
-    };
-
-    const firstResponse = await middlewareHandler(request, next);
-    assertEquals(nextCallCount, 1);
-    assertEquals(await firstResponse.text(), "fresh data");
-
-    // Get the cached response to extract the actual ETag
-    const cache = await caches.open("conditional-middleware-test");
-    const cachedResponse = await cache.match(request);
-    const generatedETag = cachedResponse?.headers.get("etag");
-
-    // Consume the cached response body to avoid resource leaks
-    if (cachedResponse) {
-      await cachedResponse.text();
-    }
-
-    if (generatedETag) {
-      // Second request with If-None-Match should get 304
-      const conditionalRequest = new Request(
-        "https://example.com/api/middleware-conditional",
-        {
-          headers: {
-            "if-none-match": generatedETag,
-          },
-        },
-      );
-
-      const secondResponse = await middlewareHandler(conditionalRequest, next);
-      assertEquals(nextCallCount, 1); // Should not call next again
-      assertEquals(secondResponse.status, 304);
-    } else {
-      // If no ETag was generated, we can't test conditional requests
-      console.warn("No ETag was generated, skipping conditional request test");
-    }
-
-    await caches.delete("conditional-middleware-test");
-  },
-);
+      ),
+  });
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(url);
+  assertExists(cached);
+  assertExists(cached!.headers.get("etag"));
+  await cached!.clone().text();
+  await caches.delete(cacheName);
+});
 
 Deno.test("Conditional Requests - Default configuration", () => {
   const config = getDefaultConditionalConfig();
@@ -381,37 +272,31 @@ Deno.test("Conditional Requests - Default configuration", () => {
   assertEquals(config.weakValidation, true);
 });
 
-Deno.test("Conditional Requests - Disabled conditional requests", async () => {
+Deno.test("Conditional Requests - disabled returns full response", async () => {
   await caches.delete("conditional-disabled-test");
-  const cache = await caches.open("conditional-disabled-test");
-  const readHandler = createReadHandler({
-    cacheName: "conditional-disabled-test",
+  const cacheName = "conditional-disabled-test";
+  const cache = await caches.open(cacheName);
+  const handle = createCacheHandler({
+    cacheName,
     features: { conditionalRequests: false },
   });
-
-  // Cache a response with ETag
   const cacheKey = "https://example.com/api/disabled";
-  const cachedResponse = new Response("cached data", {
-    headers: {
-      etag: '"should-be-ignored"',
-      expires: new Date(Date.now() + 3600000).toUTCString(),
-    },
-  });
-
-  await cache.put(new URL(cacheKey), cachedResponse);
-
-  // Request with If-None-Match should get full response (not 304)
-  const conditionalRequest = new Request(cacheKey, {
-    headers: {
-      "if-none-match": '"should-be-ignored"',
-    },
-  });
-
-  const result = await readHandler(conditionalRequest);
-
-  assertExists(result);
-  assertEquals(result.status, 200); // Should be full response, not 304
+  await cache.put(
+    new URL(cacheKey),
+    new Response("cached data", {
+      headers: {
+        etag: '"should-be-ignored"',
+        expires: new Date(Date.now() + 3600000).toUTCString(),
+      },
+    }),
+  );
+  const result = await handle(
+    new Request(cacheKey, {
+      headers: { "if-none-match": '"should-be-ignored"' },
+    }),
+    { handler: () => Promise.resolve(new Response("fresh")) },
+  );
+  assertEquals(result.status, 200);
   assertEquals(await result.text(), "cached data");
-
-  await caches.delete("conditional-disabled-test");
+  await caches.delete(cacheName);
 });

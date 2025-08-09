@@ -1,222 +1,164 @@
 import { assertEquals, assertExists } from "@std/assert";
-import {
-  createMiddlewareHandler,
-  createReadHandler,
-  createWriteHandler,
-} from "../../src/handlers.ts";
+import { createCacheHandler } from "../../src/handlers.ts";
 
-Deno.test("ReadHandler - returns null for cache miss", async () => {
-  await caches.delete("test"); // Clean up any existing cache
-  const readHandler = createReadHandler({ cacheName: "test" });
+// Unified handler tests replacing legacy read/write/middleware handlers
 
-  const request = new Request("http://example.com/api/users");
-  const result = await readHandler(request);
-
-  assertEquals(result, null);
-  await caches.delete("test");
-});
-
-Deno.test("ReadHandler - returns cached response", async () => {
-  await caches.delete("test"); // Clean up any existing cache
-  const cache = await caches.open("test");
-  const readHandler = createReadHandler({ cacheName: "test" });
-
-  // Manually put a response in cache with standard headers
-  const cacheKey = "http://example.com/api/users";
-  const expiresAt = new Date(Date.now() + 3600000); // 1 hour from now
-  const cachedResponse = new Response("cached data", {
-    headers: {
-      "content-type": "application/json",
-      "cache-tag": "user",
-      expires: expiresAt.toUTCString(),
+Deno.test("cache miss invokes handler and caches response", async () => {
+  await caches.delete("test-miss");
+  const cacheName = "test-miss";
+  const handle = createCacheHandler({ cacheName });
+  let invoked = 0;
+  const url = "http://example.com/api/users";
+  const res = await handle(new Request(url), {
+    handler: () => {
+      invoked++;
+      return Promise.resolve(
+        new Response("fresh", {
+          headers: {
+            "cache-control": "max-age=3600, public",
+            "cache-tag": "user:123",
+            "content-type": "application/json",
+          },
+        }),
+      );
     },
   });
-
-  await cache.put(new URL(cacheKey), cachedResponse);
-
-  const request = new Request("http://example.com/api/users");
-  const result = await readHandler(request);
-
-  assertExists(result);
-  assertEquals(await result.text(), "cached data");
-  assertEquals(result.headers.get("content-type"), "application/json");
-  assertEquals(result.headers.get("cache-tag"), "user");
-  await caches.delete("test");
-});
-
-Deno.test(
-  "ReadHandler - removes expired cache",
-  async () => {
-    await caches.delete("test"); // Clean up any existing cache
-    const cache = await caches.open("test");
-    const readHandler = createReadHandler({ cacheName: "test" });
-
-    // Put an expired response in cache
-    const cacheKey = "http://example.com/api/users";
-    const expiredAt = new Date(Date.now() - 3600000); // 1 hour ago
-    const expiredResponse = new Response("expired data", {
-      headers: {
-        expires: expiredAt.toUTCString(),
-      },
-    });
-
-    // Clone the response so we can consume both copies
-    const expiredResponseCopy = expiredResponse.clone();
-    await cache.put(new URL(cacheKey), expiredResponse);
-    // Consume the original to prevent resource leak
-    await expiredResponseCopy.text();
-
-    const request = new Request("http://example.com/api/users");
-    const result = await readHandler(request);
-
-    assertEquals(result, null);
-
-    // If a response was returned, consume it to prevent resource leak
-    if (result) {
-      await result.text();
-    }
-
-    // Should also remove from cache
-    const stillCached = await cache.match(new URL(cacheKey));
-    // If there was still a cached response, consume it to prevent resource leak
-    if (stillCached) {
-      await stillCached.text();
-    }
-    assertEquals(stillCached, undefined);
-
-    await caches.delete("test");
-  },
-);
-
-Deno.test("WriteHandler - caches cacheable response", async () => {
-  await caches.delete("test"); // Clean up any existing cache
-  const writeHandler = createWriteHandler({ cacheName: "test" });
-
-  const request = new Request("http://example.com/api/users");
-  const response = new Response("test data", {
-    headers: {
-      "cache-control": "max-age=3600, public",
-      "cache-tag": "user:123",
-      "content-type": "application/json",
-    },
-  });
-
-  const result = await writeHandler(request, response);
-
-  // Should remove processed headers
-  assertEquals(result.headers.has("cache-tag"), false);
-  assertEquals(result.headers.get("cache-control"), "max-age=3600, public");
-  assertEquals(result.headers.get("content-type"), "application/json");
-
-  // Should be cached
-  const cache = await caches.open("test");
-  const cacheKey = "http://example.com/api/users";
-  const cached = await cache.match(new URL(cacheKey));
+  assertEquals(invoked, 1);
+  assertEquals(await res.clone().text(), "fresh");
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(url);
   assertExists(cached);
-  assertEquals(await cached.text(), "test data");
-
-  // Should have standard headers
-  assertEquals(cached.headers.get("cache-tag"), "user:123");
-  assertExists(cached.headers.get("expires"));
-  await caches.delete("test");
+  await cached?.text();
+  await caches.delete(cacheName);
 });
 
-Deno.test("WriteHandler - does not cache non-cacheable response", async () => {
-  await caches.delete("test"); // Clean up any existing cache
-  const writeHandler = createWriteHandler({ cacheName: "test" });
-
-  const request = new Request("http://example.com/api/users");
-  const response = new Response("test data", {
-    headers: {
-      "cache-control": "no-cache, private",
-      "content-type": "application/json",
+Deno.test("cache hit returns cached without invoking handler", async () => {
+  await caches.delete("test-hit");
+  const cacheName = "test-hit";
+  const handle = createCacheHandler({ cacheName });
+  let invoked = 0;
+  const url = "http://example.com/api/users";
+  await handle(new Request(url), {
+    handler: () => {
+      invoked++;
+      return Promise.resolve(
+        new Response("value", {
+          headers: { "cache-control": "max-age=3600, public" },
+        }),
+      );
     },
   });
+  const second = await handle(new Request(url), {
+    handler: () => {
+      invoked++;
+      return Promise.resolve(new Response("should-not"));
+    },
+  });
+  assertEquals(invoked, 1);
+  assertEquals(await second.text(), "value");
+  await caches.delete(cacheName);
+});
 
-  const result = await writeHandler(request, response);
+Deno.test("expired cached entry is ignored and handler re-invoked", async () => {
+  await caches.delete("test-expired");
+  const cacheName = "test-expired";
+  const cache = await caches.open(cacheName);
+  const url = "http://example.com/api/users";
+  // Put expired response
+  await cache.put(
+    new URL(url),
+    new Response("old", {
+      headers: { expires: new Date(Date.now() - 1000).toUTCString() },
+    }),
+  );
+  const handle = createCacheHandler({ cacheName });
+  let invoked = 0;
+  const res = await handle(new Request(url), {
+    handler: () => {
+      invoked++;
+      return Promise.resolve(
+        new Response("new", {
+          headers: { "cache-control": "max-age=60, public" },
+        }),
+      );
+    },
+  });
+  assertEquals(invoked, 1);
+  assertEquals(await res.text(), "new");
+  await caches.delete(cacheName);
+});
 
-  assertEquals(result.headers.get("cache-control"), "no-cache, private");
-  assertEquals(result.headers.get("content-type"), "application/json");
-
-  // Should not be cached
-  const cache = await caches.open("test");
-  const cacheKey = "http://example.com/api/users";
-  const cached = await cache.match(new URL(cacheKey));
+Deno.test("non-cacheable response is not stored", async () => {
+  await caches.delete("test-non-cacheable");
+  const cacheName = "test-non-cacheable";
+  const handle = createCacheHandler({ cacheName });
+  let invoked = 0;
+  const url = "http://example.com/api/users";
+  await handle(new Request(url), {
+    handler: () => {
+      invoked++;
+      return Promise.resolve(
+        new Response("nc", {
+          headers: { "cache-control": "no-cache, private" },
+        }),
+      );
+    },
+  });
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(url);
   assertEquals(cached, undefined);
-  await caches.delete("test");
+  assertEquals(invoked, 1);
+  await caches.delete(cacheName);
 });
 
-Deno.test(
-  "MiddlewareHandler - returns cached response when available",
-  async () => {
-    await caches.delete("test"); // Clean up any existing cache
-    const cache = await caches.open("test");
-    const middlewareHandler = createMiddlewareHandler({ cacheName: "test" });
+Deno.test("second call after cacheable response strips cache-tag header from returned response", async () => {
+  await caches.delete("test-strip");
+  const cacheName = "test-strip";
+  const handle = createCacheHandler({ cacheName });
+  const url = "http://example.com/api/users";
+  const first = await handle(new Request(url), {
+    handler: () =>
+      Promise.resolve(
+        new Response("body", {
+          headers: {
+            "cache-control": "max-age=3600, public",
+            "cache-tag": "user:1",
+          },
+        }),
+      ),
+  });
+  // Returned response should not expose cache-tag header (implementation strips during write)
+  assertEquals(first.headers.has("cache-tag"), false);
+  const second = await handle(new Request(url), {
+    handler: () => Promise.resolve(new Response("should-not")),
+  });
+  assertEquals(await second.text(), "body");
+  await caches.delete(cacheName);
+});
 
-    // Put a response in cache
-    const cacheKey = "http://example.com/api/users";
-    const expiresAt = new Date(Date.now() + 3600000);
-    const cachedResponse = new Response("cached data", {
-      headers: {
-        "content-type": "application/json",
-        "cache-tag": "user",
-        expires: expiresAt.toUTCString(),
-      },
-    });
-
-    await cache.put(new URL(cacheKey), cachedResponse);
-
-    const request = new Request("http://example.com/api/users");
-    let nextCalled = false;
-    const next = () => {
-      nextCalled = true;
-      return Promise.resolve(new Response("fresh data"));
-    };
-
-    const result = await middlewareHandler(request, next);
-
-    assertEquals(nextCalled, false); // Should not call next()
-    assertEquals(await result.text(), "cached data");
-    await caches.delete("test");
-  },
-);
-
-Deno.test("MiddlewareHandler - calls next() and caches response", async () => {
-  await caches.delete("test"); // Clean up any existing cache
-  const middlewareHandler = createMiddlewareHandler({ cacheName: "test" });
-
-  const request = new Request("http://example.com/api/users");
-  let nextCalled = false;
-  const next = () => {
-    nextCalled = true;
-    return Promise.resolve(
-      new Response("fresh data", {
-        headers: {
-          "cache-control": "max-age=3600, public",
-          "cache-tag": "user:123",
-        },
-      }),
-    );
-  };
-
-  const result = await middlewareHandler(request, next);
-
-  assertEquals(nextCalled, true);
-  assertEquals(await result.text(), "fresh data");
-  assertEquals(result.headers.has("cache-tag"), false); // Should be removed
-
-  // Should be cached for next time
-  const cache = await caches.open("test");
-  const cacheKey = "http://example.com/api/users";
-  const cached = await cache.match(new URL(cacheKey));
-  assertExists(cached);
-
-  assertEquals(cached.headers.get("cache-tag"), "user:123");
-  assertExists(cached.headers.get("expires"));
-
-  // Clean up response resources
-  if (cached) {
-    await cached.text();
-  }
-  await caches.delete("test");
+Deno.test("cached response served instead of invoking handler (middleware analogue)", async () => {
+  await caches.delete("test-middleware-analogue");
+  const cacheName = "test-middleware-analogue";
+  const handle = createCacheHandler({ cacheName });
+  const url = "http://example.com/api/users";
+  let invoked = 0;
+  await handle(new Request(url), {
+    handler: () => {
+      invoked++;
+      return Promise.resolve(
+        new Response("prime", {
+          headers: { "cache-control": "max-age=120, public" },
+        }),
+      );
+    },
+  });
+  const hit = await handle(new Request(url), {
+    handler: () => {
+      invoked++;
+      return Promise.resolve(new Response("miss"));
+    },
+  });
+  assertEquals(invoked, 1);
+  assertEquals(await hit.text(), "prime");
+  await caches.delete(cacheName);
 });

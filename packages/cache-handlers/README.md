@@ -825,56 +825,53 @@ return new Response(content, {
 
 ## API Reference
 
-### Factory Functions
+### Unified Cache Handler
 
-#### `createCacheHandlers(config?): CacheHandlers`
+#### `createCacheHandler(options?): CacheHandle`
 
-Creates all three cache handlers with shared configuration.
+Creates a single unified handler that performs read -> (serve / miss) -> write and supports stale-while-revalidate plus conditional request validation.
 
-**Parameters:**
+**Options (subset of CacheConfig + extras):**
 
-- `config` (optional): `CacheConfig` - Configuration options
+- `cacheName` (string) Name of cache storage (default: `cache-primitives-default`)
+- `handler` (function) Upstream fetch/compute function invoked on misses or background revalidation
+- `revalidationHandler` (function) Optional specialized handler for SWR background refresh (falls back to `handler` if omitted)
+- `runInBackground` (function) Scheduler similar to `waitUntil` for SWR refresh tasks
+- `features` Object toggling sub-features (cacheTags, cacheVary, conditionalRequests, etc.)
 
-**Returns:** Object with `read`, `write`, and `middleware` handlers
+**Returns:** `(request: Request, options?: { handler?, runInBackground? }) => Promise<Response>`
+
+**Example:**
 
 ```typescript
-const { read, write, middleware } = createCacheHandlers({
-	cacheName: "my-cache",
-	defaultTtl: 300,
+import { createCacheHandler } from "cache-primitives";
+
+const handle = createCacheHandler({
+	cacheName: "my-api-cache",
+	handler: async (req) => fetch(req),
+	features: {
+		conditionalRequests: { etag: "generate" },
+	},
+});
+
+addEventListener("fetch", (event) => {
+	event.respondWith(handle(event.request));
 });
 ```
 
-### Individual Handler Creators
+SWR example (serve stale while background refresh runs):
 
-#### `createReadHandler(config?): ReadHandler`
+```typescript
+const handle = createCacheHandler({
+	cacheName: "api",
+	handler: async (req) => fetch(req),
+	runInBackground: (p) => event.waitUntil(p),
+});
 
-Creates a cache reading handler.
+// Upstream must send: Cache-Control: max-age=60, stale-while-revalidate=300
+```
 
-**Parameters:**
-
-- `config` (optional): `CacheConfig` - Configuration options
-
-**Returns:** `(request: Request) => Promise<Response | null>`
-
-#### `createWriteHandler(config?): WriteHandler`
-
-Creates a cache writing handler.
-
-**Parameters:**
-
-- `config` (optional): `CacheConfig` - Configuration options
-
-**Returns:** `(request: Request, response: Response) => Promise<Response>`
-
-#### `createMiddlewareHandler(config?): MiddlewareHandler`
-
-Creates a middleware handler that combines read and write operations.
-
-**Parameters:**
-
-- `config` (optional): `CacheConfig` - Configuration options
-
-**Returns:** `(request: Request, next: () => Promise<Response>) => Promise<Response>`
+Low-level helpers `readFromCache` / `writeToCache` remain importable from their files for focused testing, but are intentionally not re-exported via the package index.
 
 ### Cache Invalidation
 
