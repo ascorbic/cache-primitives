@@ -1,0 +1,9 @@
+{
+	"name": "@ascorbic/cache-handlers",
+	"version": "0.0.0",
+	"exports": "./src/index.ts",
+	"license": "MIT",
+	"publish": {
+		"include": ["README.md", "src"]
+	}
+}

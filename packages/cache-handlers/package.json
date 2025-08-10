@@ -1,0 +1,50 @@
+{
+	"name": "cache-handlers",
+	"version": "0.0.0",
+	"description": "Modern CDN cache primitives",
+	"type": "module",
+	"main": "dist/index.js",
+	"files": [
+		"dist",
+		"src"
+	],
+	"exports": {
+		".": {
+			"deno": "./src/index.ts",
+			"import": {
+				"types": "./dist/index.d.ts",
+				"default": "./dist/index.js"
+			}
+		}
+	},
+	"scripts": {
+		"build": "tsdown",
+		"dev": "tsdown --watch",
+		"prepublishOnly": "node --run build",
+		"lint": "deno lint",
+		"test": "pnpm run '/^test:.*/'",
+		"test:deno": "deno test test/deno",
+		"test:node": "vitest run",
+		"test:workerd": "vitest run --config vitest.workerd.config.ts"
+	},
+	"engines": {
+		"node": ">=20"
+	},
+	"devDependencies": {
+		"@arethetypeswrong/core": "^0.18.2",
+		"@cloudflare/vitest-pool-workers": "^0.8.60",
+		"publint": "^0.3.12",
+		"tsdown": "^0.13.3",
+		"undici": "^7.13.0",
+		"vitest": "^3.2.4"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/ascorbic/cache-primitives.git",
+		"directory": "packages/cache-handlers"
+	},
+	"homepage": "https://github.com/ascorbic/cdn-cache-control",
+	"keywords": [],
+	"author": "Matt Kane",
+	"license": "MIT"
+}
