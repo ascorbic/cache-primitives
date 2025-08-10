@@ -20,11 +20,9 @@ export {
 export type {
 	CacheConfig,
 	CacheHandle,
-	CacheHandleFunctionOptions,
-	CacheHandleOptions,
+	CacheInvokeOptions,
 	ConditionalRequestConfig,
 	ConditionalValidationResult,
-	CreateCacheHandlerOptions,
 	HandlerFunction,
 	HandlerInfo,
 	HandlerMode,

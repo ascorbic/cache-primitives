@@ -1,23 +1,21 @@
 # cache-handlers
 
-Unified, modern HTTP caching + invalidation + conditional requests built directly on standard Web APIs (`Request`, `Response`, `CacheStorage`). One small API: `createCacheHandler` – works on Cloudflare Workers, Netlify Edge, Deno, workerd, and Node 20+ (with Undici polyfills).
+Fully-featured, modern, standards-based HTTP caching library designed for server-side rendered web apps. Get the features of a modern CDN built into your app.
 
-## Highlights
+Modern CDNs such as Cloudflare, Netlify and Fastly include powerful features that allow you to cache responses, serve stale content while revalidating in the background, and invalidate cached content by tags or paths. This library brings those capabilities to your server-side code with a simple API. This is particularly useful if you're not running your app behind a modern caching CDN. Ironically, this includes Cloudflare, because Workers run in front of the cache.
 
-- Single handler: read -> serve (fresh/stale) -> optional background revalidate (SWR) -> write
-- Uses only standard headers for core caching logic: `Cache-Control` (+ `stale-while-revalidate`), `CDN-Cache-Control`, `Cache-Tag`, `Vary`, `ETag`, `Last-Modified`
-- Optional custom extension header: `Cache-Vary` (library-defined – lets your backend declare specific header/cookie/query components for key derivation without bloating the standard `Vary` header)
-- Stale-While-Revalidate implemented purely via directives (no custom headers)
-- Tag & path invalidation helpers (`invalidateByTag`, `invalidateByPath`, `invalidateAll` + stats)
-- Optional automatic ETag generation & conditional 304 responses
-- Backend-driven Vary via custom `Cache-Vary` (header= / cookie= / query=)
-- Zero runtime dependencies, ESM only, fully typed
-- Same code everywhere (Edge runtimes, Deno, Node + Undici)
+## How it works
+
+Set standard HTTP headers in your SSR pages or API responses, and this library will handle caching. It will cache responses as needed, and return cached data if available. It supports standard headers like `Cache-Control`, `CDN-Cache-Control`, `Cache-Tag`, `Vary`, `ETag`, and `Last-Modified`. It can handle conditional requests using `If-Modified-Since` and `If-None-Match`. This also supports a custom `Cache-Vary` header (inspired by [`Netlify-Vary`](https://www.netlify.com/blog/netlify-cache-key-variations/)) that allows you to specify which headers, cookies, or query parameters should be used for caching.
+
+## Supported runtimes
+
+This library uses the web stqndard [`CacheStorage`](https://developer.mozilla.org/en-US/docs/Web/API/CacheStorage) API for storage, which is available in modern runtimes like Cloudflare Workers, Netlify Edge and Deno. It can also be used in Node.js using the Node.js [`undici`](https://undici.nodejs.org/) polyfill.
 
 ## Install
 
 ```bash
-pnpm add cache-handlers
+pnpm i cache-handlers
 # or
 npm i cache-handlers
 ```
@@ -25,61 +23,54 @@ npm i cache-handlers
 ## Quick Start
 
 ```ts
-import { createCacheHandler } from "cache-handlers";
-
-async function upstream(req: Request) {
+// handleRequest.ts
+export async function handleRequest(_req: Request) {
 	return new Response("Hello World", {
 		headers: {
 			// Fresh for 60s, allow serving stale for 5m while background refresh runs
-			"cache-control": "public, max-age=60, stale-while-revalidate=300",
+			"cdn-cache-control": "public, max-age=60, stale-while-revalidate=300",
 			// Tag for later invalidation
 			"cache-tag": "home, content",
 		},
 	});
 }
 
-const handle = createCacheHandler({
-	cacheName: "app-cache",
-	handler: upstream,
-	features: { conditionalRequests: { etag: "generate" } },
-});
+// route.ts
+import { createCacheHandler } from "cache-handlers";
+import { handleRequest } from "./handleRequest.js";
 
-addEventListener("fetch", (event: FetchEvent) => {
-	event.respondWith(handle(event.request));
+export const GET = createCacheHandler({
+	handler: handleRequest,
+	features: { conditionalRequests: { etag: "generate" } },
 });
 ```
 
-### Lifecycle
-
-1. Request arrives; cache checked (GET only is cached)
-2. Miss -> `handler` runs, response cached
-3. Hit & still fresh -> served instantly
-4. Expired but inside `stale-while-revalidate` window -> stale response served, background revalidation queued
-5. Conditional client request (If-None-Match / If-Modified-Since) may yield a 304
-
 ## Node 20+ Usage (Undici Polyfill)
 
-Node 20 ships `fetch` et al, but _not_ `caches` yet. Use `undici` to polyfill CacheStorage.
+Node.js ships `CacheStorage` as part of `Undici`, but it is not available by default. To use it, you need to install the `undici` polyfill and set it up in your code:
+
+```bash
+pnpm i undici
+# or
+npm i undici
+```
 
 ```ts
 import { createServer } from "node:http";
-import { caches, install } from "undici"; // polyfills
+import { caches, install } from "undici";
 import { createCacheHandler } from "cache-handlers";
+// Use Unidici for Request, Response, Headers, etc.
+install();
 
-if (!globalThis.caches) {
-	// @ts-ignore
-	globalThis.caches = caches as unknown as CacheStorage;
-}
-install(); // idempotent
-
+import { handleRequest } from "./handleRequest.js";
 const handle = createCacheHandler({
-	cacheName: "node-cache",
-	handler: (req) => fetch(req),
+	handler: handleRequest,
 	features: { conditionalRequests: { etag: "generate" } },
 });
 
 createServer(async (req, res) => {
-	const request = new Request(`http://localhost:3000${req.url}`, {
+	const url = new URL(req.url ?? "/", "http://localhost:3000");
+	const request = new Request(url, {
 		method: req.method,
 		headers: req.headers as HeadersInit,
 	});
@@ -93,7 +84,7 @@ createServer(async (req, res) => {
 	} else {
 		res.end();
 	}
-}).listen(3000, () => console.log("Listening on :3000"));
+}).listen(3000, () => console.log("Listening on http://localhost:3000"));
 ```
 
 ## Other Runtimes
@@ -102,27 +93,25 @@ createServer(async (req, res) => {
 
 ```ts
 import { createCacheHandler } from "cache-handlers";
-
+import handler from "./handler.js"; // Your ssr handler function
 const handle = createCacheHandler({
-	cacheName: "cf-cache",
-	handler: (req) => fetch(req),
+	handler,
 });
-
-export default { fetch: (req: Request) => handle(req) };
-```
-
-### Netlify Edge
-
-```ts
-import { createCacheHandler } from "cache-handlers";
-export default createCacheHandler({ handler: (r) => fetch(r) });
+export default {
+	async fetch(request, env, ctx) {
+		return handle(request, {
+			runInBackground: ctx.waitUntil,
+		});
+	},
+};
 ```
 
 ### Deno / Deploy
 
 ```ts
-import { createCacheHandler } from "cache-handlers";
-const handle = createCacheHandler({ handler: (r) => fetch(r) });
+import { createCacheHandler } from "jsr:@ascorbic/cache-handlers";
+import { handleRequest } from "./handleRequest.ts";
+const handle = createCacheHandler({ handler: handleRequest });
 Deno.serve((req) => handle(req));
 ```
 
@@ -131,18 +120,20 @@ Deno.serve((req) => handle(req));
 Just send the directive in your upstream response:
 
 ```http
-Cache-Control: public, max-age=30, stale-while-revalidate=300
+CDN-Cache-Control: public, max-age=30, stale-while-revalidate=300
 ```
 
-No custom headers are added. While inside the SWR window the _stale_ cached response is returned immediately and a background revalidation run is triggered (if a `handler` was supplied).
+While inside the SWR window the _stale_ cached response is returned immediately and a background revalidation run is triggered.
 
 To use a runtime scheduler (eg Workers' `event.waitUntil`):
 
 ```ts
+import handler from "./handler.js";
+
 addEventListener("fetch", (event) => {
 	const handle = createCacheHandler({
-		handler: (r) => fetch(r),
-		runInBackground: (p) => event.waitUntil(p),
+		handler: handleRequest,
+		runInBackground: event.waitUntil,
 	});
 	event.respondWith(handle(event.request));
 });
@@ -167,27 +158,30 @@ const stats = await getCacheStats();
 console.log(stats.totalEntries, stats.entriesByTag);
 ```
 
-## Configuration Overview (`CreateCacheHandlerOptions`)
+## Configuration Overview (`CacheConfig`)
 
-| Option                                      | Purpose                                                  |
-| ------------------------------------------- | -------------------------------------------------------- |
-| `cacheName`                                 | Named cache to open (default `cache-primitives-default`) |
-| `cache`                                     | Provide a `Cache` instance directly                      |
-| `handler`                                   | Function invoked on misses / background revalidation     |
-| `defaultTtl`                                | Fallback TTL (seconds) when no cache headers present     |
-| `maxTtl`                                    | Upper bound to clamp any TTL (seconds)                   |
-| `getCacheKey`                               | Custom key generator `(request) => string`               |
-| `runInBackground`                           | Scheduler for SWR tasks (eg `waitUntil`)                 |
-| `features.conditionalRequests`              | `true`, `false` or config object (ETag, Last-Modified)   |
-| `features.cacheTags`                        | Enable `Cache-Tag` parsing (default true)                |
-| `features.cacheVary`                        | Enable `Cache-Vary` parsing (default true)               |
-| `features.vary`                             | Respect standard `Vary` header (default true)            |
-| `features.cacheControl` / `cdnCacheControl` | Header support toggles                                   |
+| Option                                      | Purpose                                                                                        |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `cacheName`                                 | Named cache to open (defaults to `caches.default` if present, else `cache-primitives-default`) |
+| `cache`                                     | Provide a `Cache` instance directly                                                            |
+| `handler`                                   | Function invoked on misses / background revalidation                                           |
+| `swr`                                       | SWR policy: `background` (default), `blocking`, or `off`                                        |
+| `defaultTtl`                                | Fallback TTL (seconds) when no cache headers present                                           |
+| `maxTtl`                                    | Upper bound to clamp any TTL (seconds)                                                         |
+| `getCacheKey`                               | Custom key generator `(request) => string`                                                     |
+| `runInBackground`                           | Scheduler for SWR tasks (eg `waitUntil`)                                                       |
+| `features.conditionalRequests`              | `true`, `false` or config object (ETag, Last-Modified)                                         |
+| `features.cacheTags`                        | Enable `Cache-Tag` parsing (default true)                                                      |
+| `features.cacheVary`                        | Enable `Cache-Vary` parsing (default true)                                                     |
+| `features.vary`                             | Respect standard `Vary` header (default true)                                                  |
+| `features.cacheControl` / `cdnCacheControl` | Header support toggles                                                                         |
+| `features.cacheStatusHeader`               | Emit `Cache-Status` header (boolean = default name, string = custom name)                      |
 
 Minimal example:
 
 ```ts
-createCacheHandler({ handler: (r) => fetch(r) });
+import { handleRequest } from "./handleRequest.js";
+createCacheHandler({ handler: handleRequest });
 ```
 
 ## Conditional Requests (ETag / Last-Modified)
@@ -195,8 +189,9 @@ createCacheHandler({ handler: (r) => fetch(r) });
 Enable with auto ETag generation:
 
 ```ts
+import { handleRequest } from "./handleRequest.js";
 createCacheHandler({
-	handler: (r) => fetch(r),
+	handler: handleRequest,
 	features: { conditionalRequests: { etag: "generate", lastModified: true } },
 });
 ```
@@ -240,19 +235,52 @@ Cache-Vary: header=Accept-Language, cookie=session_id, query=version
 
 Each listed dimension becomes part of the derived cache key. Standard `Vary` remains fully respected; `Cache-Vary` is additive and internal – safe to use even if unknown to intermediaries.
 
+## Cache-Status Header (optional)
+
+You can opt-in to emitting the [RFC 9211 `Cache-Status`](https://www.rfc-editor.org/rfc/rfc9211) response header to aid debugging and observability.
+
+Enable it with a boolean (uses the default cache name `cache-handlers`) or provide a custom cache identifier string:
+
+```ts
+import { handleRequest } from "./handleRequest.js";
+createCacheHandler({
+	handler: handleRequest,
+	features: { cacheStatusHeader: true }, // => Cache-Status: cache-handlers; miss; ttl=59
+});
+
+createCacheHandler({
+	handler: handleRequest,
+	features: { cacheStatusHeader: "edge-cache" }, // => Cache-Status: edge-cache; hit; ttl=42
+});
+```
+
+Format emitted:
+
+```
+Cache-Status: <name>; miss; ttl=123
+Cache-Status: <name>; hit; ttl=120
+Cache-Status: <name>; hit; stale; ttl=0
+```
+
+Notes:
+* `ttl` is derived from the `Expires` header if present.
+* `stale` appears when within the `stale-while-revalidate` window.
+* Header is omitted entirely when the feature flag is disabled (default).
+
 ## Types
 
 ```ts
 import type {
 	CacheConfig,
 	CacheHandle,
-	CacheHandleOptions,
+	CacheInvokeOptions,
 	ConditionalRequestConfig,
-	CreateCacheHandlerOptions,
+	ConditionalValidationResult,
 	HandlerFunction,
 	HandlerInfo,
 	HandlerMode,
 	InvalidationOptions,
+	SWRPolicy,
 } from "cache-handlers";
 ```
 
@@ -263,26 +291,6 @@ import type {
 3. Include cache tags for selective purge (`cache-tag: user:123, list:users`).
 4. Generate or preserve ETags to leverage client 304s.
 5. Keep cache keys stable & explicit if customizing via `getCacheKey`.
-
-## Troubleshooting
-
-| Symptom               | Check                                                                                                      |
-| --------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Response never cached | Ensure it's a GET and has `Cache-Control`/`CDN-Cache-Control` permitting caching (no `no-store`/`private`) |
-| Invalidation no-op    | Response needs a `Cache-Tag` matching the tag you pass                                                     |
-| SWR not triggering    | Make sure `stale-while-revalidate` directive is present and entry has expired `max-age`                    |
-| 304s never served     | Enable `conditionalRequests` and return `ETag` or `Last-Modified`                                          |
-
-## Changelog (Summary)
-
-### 0.1.0
-
-- Unified `createCacheHandler` (replaces separate read/write/middleware APIs)
-- Directive-based SWR (no custom headers)
-- Tag & path invalidation + stats
-- Conditional requests (ETag / Last-Modified / 304 generation)
-- Backend-driven variation via `Cache-Vary`
-- Cross-runtime compatibility (Workers / Netlify / Deno / Node+Undici / workerd)
 
 ## License
 

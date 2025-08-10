@@ -5,15 +5,34 @@ import type {
 	ParsedCacheHeaders,
 } from "./types.ts";
 
-const DEFAULT_CACHE_NAME = "cache-primitives-default";
+const DEFAULT_CACHE_NAME = "cache-primitives-default"; // Fallback only if no caches.default
 
 export async function getCache(
 	options: InvalidationOptions = {},
 ): Promise<Cache> {
-	return (
-		options.cache ??
-			(await caches.open(options.cacheName ?? DEFAULT_CACHE_NAME))
-	);
+	// 1. Explicit cache instance wins
+	if (options.cache) {
+		return options.cache;
+	}
+	// 2. Explicit cacheName provided
+	if (options.cacheName) {
+		return await caches.open(options.cacheName);
+	}
+	// 3. Use platform default cache if available (e.g. Cloudflare Workers caches.default)
+	try {
+		// deno-lint-ignore no-explicit-any
+		const anyCaches: any = caches as unknown;
+		if (anyCaches && typeof anyCaches === "object" && "default" in anyCaches) {
+			const def = (anyCaches as { default?: Cache }).default;
+			if (def) {
+				return def;
+			}
+		}
+	} catch {
+		// ignore and fall back
+	}
+	// 4. Fallback to opening (and potentially creating) a named cache
+	return await caches.open(DEFAULT_CACHE_NAME);
 }
 
 export function parseCacheControl(

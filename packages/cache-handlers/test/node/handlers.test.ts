@@ -81,4 +81,63 @@ describe("Cache Handler - Node.js with undici", () => {
 		expect(await resp.text()).toBe("stale data");
 		expect(runInBackground).toHaveBeenCalledTimes(1);
 	});
+
+	test("SWR blocking policy waits for fresh content", async () => {
+		const handle = createCacheHandler({ cacheName: "test", swr: "blocking" });
+		const cache = await caches.open("test");
+		// Expired entry with SWR window
+		await cache.put(
+			new URL("http://example.com/api/block"),
+			new UResponse("old", {
+				headers: {
+					"cache-control": "max-age=1, stale-while-revalidate=60, public",
+					expires: new Date(Date.now() - 1000).toUTCString(),
+				},
+			}),
+		);
+		const handler = vi.fn(() =>
+			new Response("fresh", {
+				headers: {
+					"cache-control": "max-age=30, stale-while-revalidate=60, public",
+				},
+			})
+		);
+		const resp = await handle(new Request("http://example.com/api/block"), {
+			handler,
+		});
+		expect(handler).toHaveBeenCalledTimes(1);
+		expect(await resp.text()).toBe("fresh");
+	});
+
+	test("SWR off policy treats stale as full miss (no background)", async () => {
+		const runInBackground = vi.fn();
+		const handle = createCacheHandler({
+			cacheName: "test",
+			swr: "off",
+			runInBackground,
+		});
+		const cache = await caches.open("test");
+		await cache.put(
+			new URL("http://example.com/api/off"),
+			new UResponse("stale-off", {
+				headers: {
+					"cache-control": "max-age=1, stale-while-revalidate=60, public",
+					expires: new Date(Date.now() - 1000).toUTCString(),
+				},
+			}),
+		);
+		const handler = vi.fn(() =>
+			new Response("fresh-off", {
+				headers: {
+					"cache-control": "max-age=30, stale-while-revalidate=60, public",
+				},
+			})
+		);
+		const resp = await handle(new Request("http://example.com/api/off"), {
+			handler,
+		});
+		expect(handler).toHaveBeenCalledTimes(1);
+		expect(await resp.text()).toBe("fresh-off");
+		expect(runInBackground).not.toHaveBeenCalled();
+	});
 });

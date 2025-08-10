@@ -1,4 +1,5 @@
 import { assertEquals, assertExists } from "jsr:@std/assert";
+import { spy } from "jsr:@std/testing/mock";
 import { describe, it } from "jsr:@std/testing/bdd";
 import { createCacheHandler } from "../../src/index.ts";
 import { writeToCache } from "../../src/write.ts";
@@ -73,31 +74,23 @@ describe("Stale-While-Revalidate Support", () => {
 	});
 
 	it("should serve stale content during SWR window and trigger revalidation", async () => {
-		let revalidationCalled = false;
-		let revalidationRequest: Request | undefined;
-		let waitUntilCalled = false;
+		const handler = spy((_request: Request) => {
+			return Promise.resolve(
+				createTestResponse(
+					"revalidated content",
+					"max-age=10, stale-while-revalidate=20",
+				),
+			);
+		});
 
-		const handler = (request: Request) => {
-			revalidationCalled = true;
-			revalidationRequest = request;
-			return Promise.resolve(createTestResponse(
-				"revalidated content",
-				"max-age=10, stale-while-revalidate=20",
-			));
-		};
-
-		const waitUntil = (promise: Promise<unknown>) => {
-			waitUntilCalled = true;
-			// In a real scenario, the platform would handle this promise
-			promise.catch(() => {}); // Prevent unhandled rejection
-		};
-
-		// config retained for conceptual clarity (not directly used)
+		const runInBackground = spy((p: Promise<unknown>) => {
+			p.catch(() => {}); // Prevent unhandled rejection in test env
+		});
 
 		const handle = createCacheHandler({
 			cacheName: testCacheName,
 			handler,
-			runInBackground: (p) => waitUntil(p),
+			runInBackground,
 		});
 
 		const request = new Request("https://example.com/stale");
@@ -106,23 +99,27 @@ describe("Stale-While-Revalidate Support", () => {
 			"max-age=0.1, stale-while-revalidate=2",
 		);
 
-		// Cache the response
 		await writeToCache(request, response, { cacheName: testCacheName });
 
-		// Wait for content to become stale but within SWR window
-		await wait(150); // 150ms > 100ms (max-age)
+		await wait(150); // allow to become stale inside SWR window
 
-		// Read should return stale content and trigger revalidation
 		const staleResponse = await handle(request);
 		assertEquals(await staleResponse.text(), "original content");
 
-		// Give some time for background revalidation to be triggered
-		await wait(10);
+		await wait(10); // allow background task scheduling
 
-		assertEquals(revalidationCalled, true, "Revalidation should be called");
-		assertEquals(waitUntilCalled, true, "waitUntil should be called");
-		assertExists(revalidationRequest);
-		assertEquals(revalidationRequest!.url, request.url);
+		assertEquals(
+			handler.calls.length,
+			1,
+			"Revalidation handler should be called once",
+		);
+		assertEquals(
+			runInBackground.calls.length,
+			1,
+			"Background scheduler should be invoked once",
+		);
+		const revalidationRequest = handler.calls[0].args[0] as Request;
+		assertEquals(revalidationRequest.url, request.url);
 
 		await cleanup();
 	});
@@ -153,15 +150,11 @@ describe("Stale-While-Revalidate Support", () => {
 	});
 
 	it("should fallback to queueMicrotask when waitUntil is not provided", async () => {
-		let revalidationCalled = false;
-		const handler = (_request: Request) => {
-			revalidationCalled = true;
+		const handler = spy((_request: Request) => {
 			return Promise.resolve(
 				createTestResponse("revalidated content", "max-age=10"),
 			);
-		};
-
-		// No waitUntil provided - should use queueMicrotask
+		});
 
 		const handle = createCacheHandler({ cacheName: testCacheName, handler });
 
@@ -171,24 +164,19 @@ describe("Stale-While-Revalidate Support", () => {
 			"max-age=0.1, stale-while-revalidate=2",
 		);
 
-		// Cache the response
 		await writeToCache(request, response, { cacheName: testCacheName });
 
-		// Wait for content to become stale
-		await wait(150);
+		await wait(150); // become stale
 
-		// Read should return stale content and trigger revalidation via queueMicrotask
 		const staleResponse = await handle(request);
 		assertExists(staleResponse);
 		assertEquals(await staleResponse.text(), "original content");
 
-		// Give time for microtask to execute
-		await wait(10);
-
+		await wait(10); // allow microtask
 		assertEquals(
-			revalidationCalled,
-			true,
-			"Revalidation should be called via queueMicrotask",
+			handler.calls.length,
+			1,
+			"Handler should be invoked via microtask",
 		);
 
 		await cleanup();
@@ -222,22 +210,19 @@ describe("Stale-While-Revalidate Support", () => {
 	});
 
 	it("should handle revalidation with CDN-Cache-Control header", async () => {
-		let revalidationCalled = false;
-		const handler = (_request: Request) => {
-			revalidationCalled = true;
+		const handler = spy((_request: Request) => {
 			return Promise.resolve(
 				createTestResponse("revalidated content", "max-age=10"),
 			);
-		};
-
-		const waitUntil = (p: Promise<unknown>) => {
+		});
+		const runInBackground = spy((p: Promise<unknown>) => {
 			p.catch(() => {});
-		};
+		});
 
 		const handle = createCacheHandler({
 			cacheName: testCacheName,
 			handler,
-			runInBackground: (p) => waitUntil(p),
+			runInBackground,
 		});
 
 		const request = new Request("https://example.com/cdn-cache");
@@ -248,26 +233,24 @@ describe("Stale-While-Revalidate Support", () => {
 			},
 		});
 
-		// Cache the response
 		await writeToCache(request, response, { cacheName: testCacheName });
+		await wait(150); // stale
 
-		// Wait for content to become stale
-		await wait(150);
-
-		// Read should return stale content and trigger revalidation
 		const staleResponse = await handle(request);
 		assertExists(staleResponse);
 		const body = await staleResponse.text();
-		// Depending on timing, we may see original stale body or revalidated body
 		assertEquals(["cdn content", "revalidated content"].includes(body), true);
 
-		// Give time for revalidation
 		await wait(10);
-
 		assertEquals(
-			revalidationCalled,
-			true,
-			"Revalidation should work with CDN-Cache-Control",
+			handler.calls.length,
+			1,
+			"Handler should be called once for revalidation",
+		);
+		assertEquals(
+			runInBackground.calls.length,
+			1,
+			"Background scheduler should be called once",
 		);
 
 		await cleanup();

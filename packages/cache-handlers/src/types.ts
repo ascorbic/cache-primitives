@@ -16,15 +16,16 @@
  */
 export interface CacheConfig {
 	/**
-	 * Name of the cache to use
-	 * @default "cache-primitives-default"
-	 */
-	cacheName?: string;
-
-	/**
 	 * Cache instance to use instead of opening by name
+	 * @default `caches.default` if available
 	 */
 	cache?: Cache;
+
+	/**
+	 * Name of the cache to use. If neither `cache` nor `cacheName` is provided, and `caches.default`
+	 * is not available, it defaults to "cache-primitives-default".
+	 */
+	cacheName?: string;
 
 	/**
 	 * Custom function to generate a cache key from a request.
@@ -71,6 +72,14 @@ export interface CacheConfig {
 		 * @default true
 		 */
 		conditionalRequests?: boolean | ConditionalRequestConfig;
+
+		/**
+		 * Emit RFC 9211 Cache-Status response header. When `true`, uses default name `cache-handlers`.
+		 * When a string is provided, that string is used as the cache identifier (e.g. `edge-cache`).
+		 * Example: `Cache-Status: edge-cache; hit; ttl=123`
+		 * @default false (disabled)
+		 */
+		cacheStatusHeader?: boolean | string;
 	};
 
 	/**
@@ -85,13 +94,14 @@ export interface CacheConfig {
 	 */
 	maxTtl?: number;
 
-	/**
-	 * WaitUntil handler for background tasks (like revalidation).
-	 * Similar to Cloudflare Workers' ctx.waitUntil().
-	 * Allows the platform to keep processes alive for background work.
-	 * If not provided, queueMicrotask will be used as fallback.
-	 */
-	waitUntil?: (promise: Promise<unknown>) => void;
+	/** Default handler used on cache misses and background revalidation */
+	handler?: HandlerFunction;
+
+	/** SWR policy controlling how stale responses are revalidated */
+	swr?: SWRPolicy;
+
+	/** Background scheduler for SWR revalidation tasks. If absent, queueMicrotask is used. */
+	runInBackground?: (p: Promise<unknown>) => void;
 }
 
 /**
@@ -279,7 +289,7 @@ export type HandlerFunction = (
 ) => Promise<Response> | Response;
 
 /**
- * SWR policy (reserved for future strategies).
+ * SWR policy controlling how stale-while-revalidate is executed.
  */
 export type SWRPolicy = "background" | "blocking" | "off";
 
@@ -288,31 +298,11 @@ export type SWRPolicy = "background" | "blocking" | "off";
  * handler settings. SWR behaviour beyond simple miss handling will be
  * added in subsequent iterations.
  */
-export interface CreateCacheHandlerOptions extends CacheConfig {
-	/** Default handler used on cache misses. */
-	handler?: HandlerFunction;
-
-	/** SWR policy (future). */
-	swr?: SWRPolicy;
-
-	/** Deduplication window (ms) for background revalidation. */
-	dedupeMs?: number;
-
-	/**
-	 * Background scheduler analogous to waitUntil.
-	 */
-	runInBackground?: (p: Promise<unknown>) => void;
-}
-
-export interface CacheHandleFunctionOptions {
+export interface CacheInvokeOptions {
 	handler?: HandlerFunction;
 	runInBackground?: (p: Promise<unknown>) => void;
 	swr?: SWRPolicy;
 }
-/**
- * Call options for createCacheHandler returned function.
- */
-export interface CacheHandleOptions extends CacheHandleFunctionOptions {}
 
 /**
  * Bare cache handle function returned by createCacheHandler.
@@ -320,7 +310,7 @@ export interface CacheHandleOptions extends CacheHandleFunctionOptions {}
  */
 export type CacheHandle = (
 	request: Request,
-	options?: CacheHandleOptions,
+	options?: CacheInvokeOptions,
 ) => Promise<Response>;
 
 /**
@@ -343,7 +333,7 @@ export interface InvalidationOptions {
 
 	/**
 	 * Cache name to open and invalidate from
-	 * @default "cache-primitives-default"
+	 * @default Uses caches.default if available, otherwise "cache-primitives-default"
 	 */
 	cacheName?: string;
 }
